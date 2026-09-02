@@ -19,7 +19,7 @@ namespace WpfImageProcessing.Utils
         /// <summary>
         /// 파일 경로 유효성 검사
         /// </summary>
-        public static void ValidateFilePath(string filePath, string paramName = nameof(filePath))
+        public static void ValidateFilePath(string filePath, string paramName = "filePath")
         {
             if (string.IsNullOrWhiteSpace(filePath))
                 throw new ArgumentException("파일 경로가 비어있습니다.", paramName);
@@ -115,7 +115,7 @@ namespace WpfImageProcessing.Utils
         /// <summary>
         /// Bitmap 객체 유효성 검사
         /// </summary>
-        public static void ValidateBitmap(Bitmap bitmap, string paramName = nameof(bitmap))
+        public static void ValidateBitmap(Bitmap bitmap, string paramName = "bitmap")
         {
             if (bitmap == null)
                 throw new ArgumentNullException(paramName, "Bitmap 객체가 null입니다.");
@@ -127,10 +127,9 @@ namespace WpfImageProcessing.Utils
         }
 
         /// <summary>
-        /// 이미지 크기 검증
-        /// (메모리 부족 방지)
+        /// BMP 헤더용 — 크기만 검증 (대용량 파일도 헤더 읽기 허용)
         /// </summary>
-        public static void ValidateImageSize(int width, int height)
+        public static void ValidateHeaderDimensions(int width, int height)
         {
             if (width <= 0 || height <= 0)
                 throw new ArgumentException($"이미지 크기가 유효하지 않습니다: {width}×{height}");
@@ -139,10 +138,17 @@ namespace WpfImageProcessing.Utils
                 throw new InvalidOperationException(
                     $"이미지가 너무 큽니다: {width}×{height} " +
                     $"(최대: {Constants.MAX_IMAGE_WIDTH}×{Constants.MAX_IMAGE_HEIGHT})");
+        }
 
-            // 메모리 크기 추정 (32bit 기준)
+        /// <summary>
+        /// 전체 메모리 로드용 검증
+        /// </summary>
+        public static void ValidateImageSize(int width, int height)
+        {
+            ValidateHeaderDimensions(width, height);
+
             long estimatedSize = (long)width * height * 4;
-            long maxSize = Constants.MAX_IMAGE_SIZE_GB * 1024 * 1024 * 1024;
+            long maxSize = Constants.MAX_IMAGE_SIZE_GB * 1024L * 1024 * 1024;
 
             if (estimatedSize > maxSize)
                 throw new InvalidOperationException(

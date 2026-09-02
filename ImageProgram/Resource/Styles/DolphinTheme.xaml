@@ -1,0 +1,55 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      DOLPHIN UI (AtiWpf.Ui) Theme
+      PDF: ColorsDark + 컨트롤 Style 등록
+      주의: AtiWpf.Ui는 Button TargetType 암시적 Style이 없으므로
+            ButtonMedium / GroupBoxMedium 등을 StaticResource로 명시 적용해야 함
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Themes/ColorsDark.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Themes/Typography.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Themes/Icons.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/Button/Button.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/Button/ButtonGhost.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/ToggleButton/ToggleButton.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/GroupBox/GroupBox.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/Menu/Menu.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/Menu/MenuItem.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/ScrollViewer/ScrollViewer.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/ScrollBar/ScrollBar.xaml"/>
+        <ResourceDictionary Source="pack://application:,,,/AtiWpf.Ui;component/Controls/ProgressBar/ProgressBar.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- 암시적 Style: Dolphin named Style을 기본으로 연결 -->
+    <Style TargetType="Button" BasedOn="{StaticResource ButtonMedium}"/>
+    <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleButtonMedium}"/>
+    <Style TargetType="GroupBox" BasedOn="{StaticResource GroupBoxMedium}"/>
+
+    <Style TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style TargetType="Window">
+        <Setter Property="Background" Value="{DynamicResource AppBackground}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style TargetType="StatusBar">
+        <Setter Property="Background" Value="{DynamicResource ContentBackground}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
+    </Style>
+
+    <Style TargetType="Menu">
+        <Setter Property="Background" Value="{DynamicResource ContentBackground}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
+    </Style>
+</ResourceDictionary>

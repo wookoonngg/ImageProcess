@@ -1,0 +1,33 @@
+<UserControl x:Class="WpfImageProcessing.Controls.ImageViewerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#1E1E1E">
+    <Grid>
+        <ScrollViewer x:Name="ScrollHost"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      PreviewMouseWheel="ScrollHost_PreviewMouseWheel"
+                      PreviewMouseLeftButtonDown="ScrollHost_PreviewMouseLeftButtonDown"
+                      PreviewMouseLeftButtonUp="ScrollHost_PreviewMouseLeftButtonUp"
+                      PreviewMouseMove="ScrollHost_PreviewMouseMove"
+                      ScrollChanged="ScrollHost_ScrollChanged">
+            <Grid x:Name="ImageContainer">
+                <Image x:Name="DisplayImage"
+                       Stretch="None"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                <Canvas x:Name="RoiCanvas" IsHitTestVisible="False">
+                    <Rectangle x:Name="RoiRectangle"
+                               Stroke="#EBCB8B" StrokeThickness="2"
+                               Fill="#33EBCB8B"
+                               Visibility="Collapsed"/>
+                </Canvas>
+            </Grid>
+        </ScrollViewer>
+
+        <Border VerticalAlignment="Top" HorizontalAlignment="Right"
+                Margin="8" Padding="6,2"
+                Background="#AA2E3440" CornerRadius="3">
+            <TextBlock x:Name="ZoomLabel" Text="100%" Foreground="#88C0D0"/>
+        </Border>
+    </Grid>
+</UserControl>

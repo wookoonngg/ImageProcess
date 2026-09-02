@@ -1,12 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Drawing;
+using WpfImageProcessing.Models;
 
-namespace ImageProgram.Services
+namespace WpfImageProcessing.Services
 {
-    internal interface IImageFileService
+    /// <summary>
+    /// BMP 이미지 파일 I/O 계약
+    /// </summary>
+    public interface IImageFileService
     {
+        BitmapFileInfo ReadHeader(string filePath);
+        Bitmap LoadImage(string filePath);
+        void SaveImage(Bitmap bitmap, string filePath, bool overwrite = true);
     }
 }

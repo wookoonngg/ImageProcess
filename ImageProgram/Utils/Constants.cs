@@ -33,7 +33,12 @@
         /// </summary>
         public const int MAX_IMAGE_WIDTH = 100000;
         public const int MAX_IMAGE_HEIGHT = 100000;
-        public const long MAX_IMAGE_SIZE_GB = 10;  // 10GB
+        public const long MAX_IMAGE_SIZE_GB = 10;
+
+        /// <summary>이 크기 초과 시 Preview(다운샘플) 모드로 표시</summary>
+        public const long PREVIEW_MODE_BYTES = 512L * 1024 * 1024;
+
+        public const int PREVIEW_MAX_PIXEL = 4096;
 
         /// <summary>
         /// 지원하는 비트 깊이

@@ -186,18 +186,27 @@ namespace WpfImageProcessing.Utils
         /// </summary>
         public static BitmapImage LoadBitmapImageFromFile(string filePath)
         {
+            return LoadPreviewFromFile(filePath, 0);
+        }
+
+        /// <summary>
+        /// 대용량 BMP Preview — maxPixel &gt; 0 이면 다운샘플 로드
+        /// </summary>
+        public static BitmapImage LoadPreviewFromFile(string filePath, int maxPixel = Constants.PREVIEW_MAX_PIXEL)
+        {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"파일을 찾을 수 없습니다: {filePath}");
 
             try
             {
-                BitmapImage bitmapImage = new BitmapImage();
+                var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
                 bitmapImage.UriSource = new Uri(filePath, UriKind.Absolute);
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                if (maxPixel > 0)
+                    bitmapImage.DecodePixelWidth = maxPixel;
                 bitmapImage.EndInit();
                 bitmapImage.Freeze();
-
                 return bitmapImage;
             }
             catch (Exception ex)
