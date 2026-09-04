@@ -375,5 +375,16 @@ namespace WpfImageProcessing
         }
 
         #endregion
+
+
+       
+
+
+
+
+
+
     }
+
+
 }

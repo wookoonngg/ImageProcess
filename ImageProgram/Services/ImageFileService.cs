@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
 using WpfImageProcessing.Models;
 using WpfImageProcessing.Utils;
 
@@ -108,5 +109,14 @@ namespace WpfImageProcessing.Services
                 throw new InvalidOperationException(Constants.ERROR_SAVE_FAILED, ex);
             }
         }
+
+
+
+
+
+
+
+
+
     }
 }
