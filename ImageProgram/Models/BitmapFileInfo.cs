@@ -42,8 +42,17 @@ namespace WpfImageProcessing.Models
         public int PixelDataOffset { get; set; }
 
         /// <summary>
-        /// 압축 방식 (0=무압축, 1=RLE-8, 2=RLE-4)
-        /// WEEK 1: 무압축만 지원
+        /// DIB 헤더 크기 (40=BITMAPINFOHEADER, 108=V4, 124=V5)
+        /// </summary>
+        public int HeaderSize { get; set; }
+
+        /// <summary>
+        /// true면 아래→위 저장 (일반적인 BMP)
+        /// </summary>
+        public bool IsBottomUp { get; set; }
+
+        /// <summary>
+        /// 압축 방식 (0=무압축, 3=BI_BITFIELDS)
         /// </summary>
         public int CompressionType { get; set; }
 
@@ -81,8 +90,8 @@ namespace WpfImageProcessing.Models
                 return false;
             }
 
-            // 압축 방식 검증 (무압축만 지원)
-            if (CompressionType != 0)
+            // 0=RGB 무압축, 3=BI_BITFIELDS (32bit BMP에서 흔함)
+            if (CompressionType != 0 && CompressionType != 3)
             {
                 Debug.WriteLine($"❌ 지원하지 않는 압축 방식: {CompressionType}");
                 return false;

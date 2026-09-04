@@ -38,7 +38,10 @@
         /// <summary>이 크기 초과 시 Preview(다운샘플) 모드로 표시</summary>
         public const long PREVIEW_MODE_BYTES = 512L * 1024 * 1024;
 
-        public const int PREVIEW_MAX_PIXEL = 4096;
+        public const int PREVIEW_MAX_PIXEL = 2048;
+
+        /// <summary>수 GB급 BMP용 미리보기 한 변 최대 픽셀 (열기 지연 완화)</summary>
+        public const int PREVIEW_MAX_PIXEL_HUGE = 1024;
 
         /// <summary>
         /// 지원하는 비트 깊이

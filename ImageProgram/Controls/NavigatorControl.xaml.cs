@@ -17,11 +17,11 @@ namespace WpfImageProcessing.Controls
             InitializeComponent();
         }
 
-        public void SetPreviewImage(BitmapImage? image)
+        public void SetPreviewImage(BitmapSource? image)
         {
             PreviewImage.Source = image;
-            _imageWidth = image?.Width ?? 0;
-            _imageHeight = image?.Height ?? 0;
+            _imageWidth = image?.PixelWidth ?? 0;
+            _imageHeight = image?.PixelHeight ?? 0;
             UpdatePreviewLayout();
         }
 

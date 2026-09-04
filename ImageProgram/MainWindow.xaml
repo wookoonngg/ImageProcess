@@ -17,22 +17,20 @@
             </MenuItem>
         </Menu>
 
-        <StatusBar DockPanel.Dock="Bottom" Margin="0,6,0,0">
-            <StatusBarItem>
+        <Border DockPanel.Dock="Bottom" Margin="0,6,0,0" Padding="8,6"
+                Background="{DynamicResource ContentBackground}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4"
+                MinHeight="28">
+            <DockPanel>
+                <TextBlock x:Name="ProcessingTimeText" DockPanel.Dock="Right"
+                           Text="Processing Time: - ms" FontWeight="SemiBold"
+                           Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
+                <TextBlock x:Name="ImageInfoText" DockPanel.Dock="Right"
+                           Text="" Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
                 <TextBlock x:Name="StatusText" Text="BMP 파일을 열어주세요."
-                           Foreground="{DynamicResource AppForeground}"/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="ImageInfoText" Text=""
-                           Foreground="{DynamicResource AppForeground}"/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="ProcessingTimeText" Text="Processing Time: - ms"
-                           Foreground="{DynamicResource AppForeground}" FontWeight="SemiBold"/>
-            </StatusBarItem>
-        </StatusBar>
+                           Foreground="{DynamicResource AppForeground}" TextWrapping="NoWrap"/>
+            </DockPanel>
+        </Border>
 
         <Grid>
             <Grid.ColumnDefinitions>

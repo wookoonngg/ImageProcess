@@ -47,7 +47,7 @@ namespace WpfImageProcessing.Controls
             InitializeComponent();
         }
 
-        public void SetImage(BitmapImage? image)
+        public void SetImage(BitmapSource? image)
         {
             DisplayImage.Source = image;
             ClearRoi();
@@ -202,10 +202,13 @@ namespace WpfImageProcessing.Controls
                 return;
 
             double scale = (ImageContainer.LayoutTransform as ScaleTransform)?.ScaleX ?? 1.0;
+            double imageWidth = DisplayImage.Source is BitmapSource bs ? bs.PixelWidth : DisplayImage.Source.Width;
+            double imageHeight = DisplayImage.Source is BitmapSource bs2 ? bs2.PixelHeight : DisplayImage.Source.Height;
+
             ViewportChanged?.Invoke(this, new ViewportChangedEventArgs
             {
-                ImageWidth = DisplayImage.Source.Width,
-                ImageHeight = DisplayImage.Source.Height,
+                ImageWidth = imageWidth,
+                ImageHeight = imageHeight,
                 ViewportWidth = ScrollHost.ViewportWidth,
                 ViewportHeight = ScrollHost.ViewportHeight,
                 ScrollOffsetX = ScrollHost.HorizontalOffset,

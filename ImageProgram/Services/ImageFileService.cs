@@ -30,7 +30,7 @@ namespace WpfImageProcessing.Services
             if (signature != BmpMagic)
                 throw new InvalidOperationException(Constants.ERROR_INVALID_BMP);
 
-            long fileSize = reader.ReadUInt32();
+            reader.ReadUInt32(); // file size in header (32bit, 4GB 이상에서 부정확)
             reader.ReadUInt16(); // reserved
             reader.ReadUInt16(); // reserved
             int pixelDataOffset = reader.ReadInt32();
@@ -54,6 +54,8 @@ namespace WpfImageProcessing.Services
                 BitDepth = bitDepth,
                 FileSize = new FileInfo(filePath).Length,
                 PixelDataOffset = pixelDataOffset,
+                HeaderSize = headerSize,
+                IsBottomUp = height > 0,
                 CompressionType = compression,
                 LoadedTime = DateTime.Now
             };

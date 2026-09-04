@@ -22,6 +22,7 @@ namespace WpfImageProcessing
         private bool _isPreviewMode;
         private RoiData? _currentRoi;
         private Bitmap? _templateImage;
+        private bool _isOpening;
 
         public MainWindow()
         {
@@ -44,71 +45,131 @@ namespace WpfImageProcessing
         private void SaveMenuItem_Click(object sender, RoutedEventArgs e) => SaveImage();
         private void ExitMenuItem_Click(object sender, RoutedEventArgs e) => Close();
 
-        private void OpenImage()
+        private async void OpenImage()
         {
+            if (_isOpening)
+                return;
+
+            string? initialDir = FindDefaultImageFolder();
             var dialog = new OpenFileDialog
             {
                 Filter = Constants.BMP_FILTER,
-                Title = "BMP 이미지 열기"
+                Title = "BMP 이미지 열기",
+                DefaultExt = ".bmp",
+                CheckFileExists = true,
+                Multiselect = false,
+                InitialDirectory = initialDir
             };
 
-            if (dialog.ShowDialog() != true)
+            if (dialog.ShowDialog(this) != true)
                 return;
+
+            await LoadImageFromPathAsync(dialog.FileName);
+        }
+
+        private async Task LoadImageFromPathAsync(string filePath)
+        {
+            _isOpening = true;
+            Mouse.OverrideCursor = Cursors.Wait;
 
             try
             {
-                Mouse.OverrideCursor = Cursors.Wait;
-                LoadImageFromPath(dialog.FileName);
+                _sourceImage?.Dispose();
+                _resultImage?.Dispose();
+                _templateImage?.Dispose();
+                _templateImage = null;
+                _currentRoi = null;
+
+                StatusText.Text = "헤더 읽는 중...";
+                ImageInfoText.Text = Path.GetFileName(filePath);
+
+                BitmapFileInfo headerInfo = await Task.Run(() => _imageFileService.ReadHeader(filePath));
+                _headerInfo = headerInfo;
+                _currentFilePath = filePath;
+                _isPreviewMode = NeedsPreviewMode(headerInfo);
+
+                StatusText.Text = _isPreviewMode
+                    ? $"Preview 생성 중... ({headerInfo.Width}×{headerInfo.Height}, {FormatBytes(headerInfo.FileSize)})"
+                    : "이미지 로드 중...";
+
+                BitmapSource displayImage;
+                if (_isPreviewMode)
+                {
+                    var sw = Stopwatch.StartNew();
+                    var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
+                    displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
+                    sw.Stop();
+                    ProcessingTimeText.Text = $"Processing Time: {sw.ElapsedMilliseconds} ms (Preview)";
+                }
+                else
+                {
+                    try
+                    {
+                        displayImage = await Task.Run(() => BmpDisplayLoader.Load(filePath, headerInfo));
+                    }
+                    catch
+                    {
+                        var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
+                        displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
+                    }
+
+                    try
+                    {
+                        Bitmap bitmap = await Task.Run(() => _imageFileService.LoadImage(filePath));
+                        _sourceImage = new ImageData { SourceFilePath = filePath, PixelData = bitmap };
+                        _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
+                    }
+                    catch
+                    {
+                        _isPreviewMode = true;
+                    }
+                }
+
+                SourceViewer.SetImage(displayImage);
+                ResultViewer.SetImage(displayImage);
+                Navigator.SetPreviewImage(displayImage);
+                Histogram.Clear();
+                RoiInfoText.Text = "ROI: -";
+                MatchScoreText.Text = "Score: -";
+                MatchPositionText.Text = "Position: -";
+
+                StatusText.Text = _isPreviewMode
+                    ? $"Preview 모드 ({displayImage.PixelWidth}×{displayImage.PixelHeight} 표시) — 원본: {headerInfo.Width}×{headerInfo.Height}"
+                    : Constants.SUCCESS_FILE_OPENED;
+
+                ImageInfoText.Text =
+                    $"{headerInfo.Width}×{headerInfo.Height} | {headerInfo.BitDepth}bit | " +
+                    $"{FormatBytes(headerInfo.FileSize)} | {Path.GetFileName(filePath)}";
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "열기 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                string detail = ex.InnerException == null ? ex.Message : $"{ex.Message}\n\n{ex.InnerException.Message}";
+                MessageBox.Show(detail, "열기 오류", MessageBoxButton.OK, MessageBoxImage.Error);
                 StatusText.Text = $"오류: {ex.Message}";
             }
             finally
             {
                 Mouse.OverrideCursor = null;
+                _isOpening = false;
             }
         }
 
-        private void LoadImageFromPath(string filePath)
+        private static string? FindDefaultImageFolder()
         {
-            _sourceImage?.Dispose();
-            _resultImage?.Dispose();
-            _templateImage?.Dispose();
-            _templateImage = null;
-            _currentRoi = null;
-
-            _headerInfo = _imageFileService.ReadHeader(filePath);
-            _currentFilePath = filePath;
-            _isPreviewMode = NeedsPreviewMode(_headerInfo);
-
-            BitmapImage displayImage;
-            if (_isPreviewMode)
+            string[] candidates =
             {
-                displayImage = Utils.ImageConverter.LoadPreviewFromFile(filePath);
-                StatusText.Text = $"Preview 모드 ({displayImage.PixelWidth}×{displayImage.PixelHeight} 표시) — 원본: {_headerInfo.Width}×{_headerInfo.Height}";
-            }
-            else
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resource", "TestImages"),
+                Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Resource", "TestImages")),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "ImageProgram", "ImageProgram", "Resource", "TestImages")
+            };
+
+            foreach (string path in candidates)
             {
-                Bitmap bitmap = _imageFileService.LoadImage(filePath);
-                _sourceImage = new ImageData { SourceFilePath = filePath, PixelData = bitmap };
-                _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
-                displayImage = Utils.ImageConverter.BitmapToBitmapImage(bitmap);
-                StatusText.Text = Constants.SUCCESS_FILE_OPENED;
+                if (Directory.Exists(path))
+                    return path;
             }
 
-            SourceViewer.SetImage(displayImage);
-            ResultViewer.SetImage(displayImage);
-            Navigator.SetPreviewImage(displayImage);
-            Histogram.Clear();
-            RoiInfoText.Text = "ROI: -";
-            MatchScoreText.Text = "Score: -";
-            MatchPositionText.Text = "Position: -";
-
-            ImageInfoText.Text =
-                $"{_headerInfo.Width}×{_headerInfo.Height} | {_headerInfo.BitDepth}bit | " +
-                $"{FormatBytes(_headerInfo.FileSize)} | {Path.GetFileName(filePath)}";
+            return null;
         }
 
         private static bool NeedsPreviewMode(BitmapFileInfo info)
@@ -161,10 +222,12 @@ namespace WpfImageProcessing
 
         private void SavePreviewImage(string filePath)
         {
-            if (_currentFilePath == null) return;
-            var preview = Utils.ImageConverter.LoadPreviewFromFile(_currentFilePath);
-            using var bmp = Utils.ImageConverter.BitmapImageToBitmap(preview);
-            _imageFileService.SaveImage(bmp, filePath);
+            if (_currentFilePath == null || _headerInfo == null) return;
+            var preview = BmpDisplayLoader.Load(_currentFilePath, _headerInfo);
+            var encoder = new BmpBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(preview));
+            using var fs = File.Create(filePath);
+            encoder.Save(fs);
         }
 
         #endregion

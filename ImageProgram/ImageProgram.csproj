@@ -15,4 +15,8 @@
     <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Resource\TestImages\" />
+  </ItemGroup>
+
 </Project>

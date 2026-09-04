@@ -24,8 +24,8 @@ namespace WpfImageProcessing.Utils
             if (string.IsNullOrWhiteSpace(filePath))
                 throw new ArgumentException("파일 경로가 비어있습니다.", paramName);
 
-            if (filePath.Length > 260)  // Windows MAX_PATH
-                throw new ArgumentException("파일 경로가 너무 깁니다 (260자 초과).", paramName);
+            if (filePath.Length > 32767)
+                throw new ArgumentException("파일 경로가 너무 깁니다.", paramName);
 
             // 경로에 사용할 수 없는 문자 확인
             char[] invalidPathChars = Path.GetInvalidPathChars();
@@ -46,8 +46,8 @@ namespace WpfImageProcessing.Utils
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"파일을 찾을 수 없습니다: {filePath}");
 
-            string extension = Path.GetExtension(filePath).ToLower();
-            if (extension != Constants.BMP_EXTENSION)
+            string extension = Path.GetExtension(filePath);
+            if (!extension.Equals(Constants.BMP_EXTENSION, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"BMP 파일이 아닙니다: {filePath}");
         }
 
