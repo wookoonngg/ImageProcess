@@ -7,7 +7,9 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using WpfImageProcessing.Controls;
 using WpfImageProcessing.Models;
+using WpfImageProcessing.Native;
 using WpfImageProcessing.Services;
+using WpfImageProcessing.Services.Processing;
 using WpfImageProcessing.Utils;
 
 namespace WpfImageProcessing
@@ -15,20 +17,25 @@ namespace WpfImageProcessing
     public partial class MainWindow : Window
     {
         private readonly IImageFileService _imageFileService;
+        private readonly IImageProcessingFacade _processing;
+        private readonly ILogger _logger;
         private ImageData? _sourceImage;
         private ImageData? _resultImage;
+        private PixelBuffer? _sourceBuffer;
         private string? _currentFilePath;
         private BitmapFileInfo? _headerInfo;
         private bool _isPreviewMode;
         private RoiData? _currentRoi;
-        private Bitmap? _templateImage;
+        private TemplateData? _templateData;
         private bool _isOpening;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            _imageFileService = new ImageFileService(new ConsoleLogger());
+            _logger = new ConsoleLogger();
+            _imageFileService = new ImageFileService(_logger);
+            _processing = new ImageProcessingFacade(new NativeImageProcessingBridge(_logger));
 
             SourceViewer.ViewportChanged += (_, e) => Navigator.UpdateViewport(e);
             SourceViewer.RoiSelected += OnRoiSelected;
@@ -76,8 +83,8 @@ namespace WpfImageProcessing
             {
                 _sourceImage?.Dispose();
                 _resultImage?.Dispose();
-                _templateImage?.Dispose();
-                _templateImage = null;
+                _sourceBuffer = null;
+                _templateData = null;
                 _currentRoi = null;
 
                 StatusText.Text = "헤더 읽는 중...";
@@ -118,10 +125,12 @@ namespace WpfImageProcessing
                         Bitmap bitmap = await Task.Run(() => _imageFileService.LoadImage(filePath));
                         _sourceImage = new ImageData { SourceFilePath = filePath, PixelData = bitmap };
                         _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
+                        _sourceBuffer = await Task.Run(() => PixelBuffer.FromBitmap(bitmap));
                     }
                     catch
                     {
                         _isPreviewMode = true;
+                        _sourceBuffer = null;
                     }
                 }
 
@@ -269,80 +278,174 @@ namespace WpfImageProcessing
                 return;
             }
 
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+                return;
+
             RunWithTimer("Template 등록", () =>
             {
-                _templateImage?.Dispose();
-                _templateImage = null;
-                StatusText.Text = $"Template 등록됨: {_currentRoi.Width}×{_currentRoi.Height} (C++ 연동 후 실제 추출)";
+                _templateData = _processing.RegisterTemplate(buffer, _currentRoi);
+                if (_templateData == null)
+                {
+                    StatusText.Text =
+                        $"Template ROI 확보: {_currentRoi.Width}×{_currentRoi.Height} — C++ IpExtractRoi 스텁(미구현) 또는 DLL 없음";
+                    // C++ 미구현 시에도 Matching 경로 테스트용으로 ROI 크기만 보관
+                    _templateData = new TemplateData
+                    {
+                        SourceRoi = _currentRoi,
+                        Pixels = new byte[checked(_currentRoi.Width * _currentRoi.Height)],
+                        Width = _currentRoi.Width,
+                        Height = _currentRoi.Height
+                    };
+                }
+                else
+                {
+                    StatusText.Text = $"Template 등록됨: {_templateData.Width}×{_templateData.Height}";
+                }
             });
         }
 
         private void UpdateHistogramPlaceholder(RoiData roi)
         {
-            // WEEK 2: C++ Histogram 연동 전 — ROI 크기 기반 데모 히스토그램
-            var bins = new int[256];
+            if (_sourceBuffer != null)
+            {
+                int[]? bins = _processing.GetHistogram(_sourceBuffer, roi);
+                if (bins != null)
+                {
+                    Histogram.SetHistogram(bins);
+                    return;
+                }
+            }
+
+            // C++ 스텁/미로드 시 자리표시용
+            var demo = new int[256];
             int peak = Math.Clamp(roi.Width + roi.Height, 1, 255);
             for (int i = 0; i < 256; i++)
-                bins[i] = Math.Max(0, peak - Math.Abs(i - peak / 2));
-            Histogram.SetHistogram(bins);
+                demo[i] = Math.Max(0, peak - Math.Abs(i - peak / 2));
+            Histogram.SetHistogram(demo);
         }
 
         #endregion
 
-        #region Processing (스텁 — C++ DLL 연동 예정)
+        #region Processing (C# Facade → C++ DLL)
 
         private void Process_Dilation(object sender, RoutedEventArgs e) =>
-            RunProcessing("Dilation (팽창)");
+            RunMorphology(MorphologyOperation.Dilation);
         private void Process_Erosion(object sender, RoutedEventArgs e) =>
-            RunProcessing("Erosion (수축)");
-        private void Process_Smoothing(object sender, RoutedEventArgs e) =>
-            RunProcessing("Smoothing (평활화)");
-        private void Process_Threshold(object sender, RoutedEventArgs e) =>
-            RunProcessing("Threshold (이진화)");
-        private void Process_Gaussian(object sender, RoutedEventArgs e) =>
-            RunProcessing("Gaussian Filter");
-        private void Process_Laplacian(object sender, RoutedEventArgs e) =>
-            RunProcessing("Laplacian Filter");
-        private void Process_Sobel(object sender, RoutedEventArgs e) =>
-            RunProcessing("Sobel Filter");
-
-        private void Match_DIFF(object sender, RoutedEventArgs e) =>
-            RunMatching("DIFF");
-        private void Match_CORR(object sender, RoutedEventArgs e) =>
-            RunMatching("CORR");
-        private void Match_COEFF(object sender, RoutedEventArgs e) =>
-            RunMatching("COEFF");
-
-        private void RunProcessing(string name)
+            RunMorphology(MorphologyOperation.Erosion);
+        private void Process_Smoothing(object sender, RoutedEventArgs e)
         {
-            if (_headerInfo == null)
-            {
-                MessageBox.Show("먼저 BMP 파일을 열어주세요.", name, MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
                 return;
-            }
-
-            RunWithTimer(name, () =>
-            {
-                // WEEK 2~3: C++ DLL 호출 후 ResultViewer 갱신
-                StatusText.Text = $"{name} — C++ 영상처리 DLL 연동 예정";
-            });
+            ApplyProcessingResult(_processing.RunSmoothing(buffer, BuildParams()));
         }
 
-        private void RunMatching(string method)
+        private void Process_Threshold(object sender, RoutedEventArgs e)
         {
-            if (_templateImage == null && _currentRoi == null)
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+                return;
+            ApplyProcessingResult(_processing.RunThreshold(buffer, BuildParams()));
+        }
+        private void Process_Gaussian(object sender, RoutedEventArgs e) =>
+            RunFilter(FilterOperation.Gaussian);
+        private void Process_Laplacian(object sender, RoutedEventArgs e) =>
+            RunFilter(FilterOperation.Laplacian);
+        private void Process_Sobel(object sender, RoutedEventArgs e) =>
+            RunFilter(FilterOperation.Sobel);
+
+        private void Match_DIFF(object sender, RoutedEventArgs e) =>
+            RunMatching(MatchingMethod.Diff);
+        private void Match_CORR(object sender, RoutedEventArgs e) =>
+            RunMatching(MatchingMethod.Corr);
+        private void Match_COEFF(object sender, RoutedEventArgs e) =>
+            RunMatching(MatchingMethod.Coeff);
+
+        private void RunMorphology(MorphologyOperation op)
+        {
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+                return;
+            ApplyProcessingResult(_processing.RunMorphology(op, buffer, BuildParams()));
+        }
+
+        private void RunFilter(FilterOperation op)
+        {
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+                return;
+            ApplyProcessingResult(_processing.RunFilter(op, buffer, BuildParams()));
+        }
+
+        private void RunMatching(MatchingMethod method)
+        {
+            if (_templateData == null)
             {
-                MessageBox.Show("Template 등록 또는 ROI 선택이 필요합니다.", method,
+                MessageBox.Show("먼저 Template을 등록하세요.", method.ToString(),
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            RunWithTimer($"Template Matching ({method})", () =>
+            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+                return;
+
+            MatchingResult result = _processing.RunMatching(method, buffer, _templateData, _currentRoi);
+            ProcessingTimeText.Text = $"Processing Time: - ms (Template {method})";
+            if (result.Success)
             {
-                MatchScoreText.Text = "Score: (C++ 연동 예정)";
-                MatchPositionText.Text = "Position: (C++ 연동 예정)";
-                StatusText.Text = $"Template Matching {method} — C++ DLL 연동 예정";
-            });
+                MatchScoreText.Text = $"Score: {result.Score:F4}";
+                MatchPositionText.Text = $"Position: ({result.BestX}, {result.BestY})";
+                StatusText.Text = $"Template Matching {method} OK";
+            }
+            else
+            {
+                MatchScoreText.Text = "Score: -";
+                MatchPositionText.Text = "Position: -";
+                StatusText.Text = $"Template Matching {method}: {result.Message}";
+            }
+        }
+
+        private void ApplyProcessingResult(ProcessingResult result)
+        {
+            ProcessingTimeText.Text = $"Processing Time: {result.ElapsedMs} ms ({result.OperationName})";
+            if (!result.Success || result.OutputPixels == null)
+            {
+                StatusText.Text = $"{result.OperationName}: {result.Message}";
+                return;
+            }
+
+            var outBuffer = new PixelBuffer(result.OutputPixels, result.Width, result.Height);
+            using Bitmap bmp = outBuffer.ToBitmap();
+            BitmapSource display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
+            ResultViewer.SetImage(display);
+
+            _resultImage?.Dispose();
+            _resultImage = new ImageData
+            {
+                SourceFilePath = _currentFilePath ?? "",
+                PixelData = (Bitmap)bmp.Clone()
+            };
+            StatusText.Text = $"{result.OperationName} 완료";
+        }
+
+        private ProcessingParams BuildParams() => new()
+        {
+            KernelSize = 3,
+            ThresholdValue = 128,
+            GaussianSigma = 1.0,
+            Roi = _currentRoi
+        };
+
+        private bool TryGetSourceBuffer(out PixelBuffer buffer)
+        {
+            if (_sourceBuffer != null)
+            {
+                buffer = _sourceBuffer;
+                return true;
+            }
+
+            MessageBox.Show(
+                "처리용 픽셀 버퍼가 없습니다.\n" +
+                "작은 BMP를 열거나(전체 로드), Preview 모드에서는 C++ 연동 후 ROI 타일 처리를 사용하세요.",
+                "영상처리", MessageBoxButton.OK, MessageBoxImage.Warning);
+            buffer = null!;
+            return false;
         }
 
         private void RunWithTimer(string operation, Action action)
@@ -370,21 +473,12 @@ namespace WpfImageProcessing
         {
             _sourceImage?.Dispose();
             _resultImage?.Dispose();
-            _templateImage?.Dispose();
+            _sourceBuffer = null;
+            _templateData = null;
             base.OnClosed(e);
         }
 
         #endregion
-
-
-       
-
-
-
-
-
-
     }
-
-
 }
+

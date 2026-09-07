@@ -255,14 +255,15 @@ Camera(원본) → Processing → Inspection Result(결과)
 WEEK 1 (현재)
   MainWindow + Controls + ImageFileService + Models
 
-WEEK 2
-  + HistogramService
-  + MorphologyProcessor / ThresholdProcessor / SmoothingProcessor (C++)
-  + ProcessingTimer UI 연동
+WEEK 2 (골격 완료)
+  + ImageProcessingNative (C++ DLL, 연산 스텁)
+  + NativeMethods / PixelBuffer (P/Invoke)
+  + IImageProcessingBridge + ImageProcessingFacade
+  + Morphology / Filter / Threshold / Matching / ROI API 경로
 
 WEEK 3
-  + FilterProcessor (Gaussian/Laplacian/Sobel)
-  + TemplateData + TemplateMatchingService (DIFF/CORR/COEFF)
+  + C++ 연산 본체 (팽창·수축·평활화·이진화·필터·매칭)
+  + ROI Histogram 실데이터 / Preview 타일 처리
 
 WEEK 4
   + 성능 최적화 / 예외 강화 / 통합 테스트
@@ -274,13 +275,13 @@ WEEK 4
 
 ```text
 Controls / MainWindow
-        ↓  (의존)
-    Services / Models
-        ↓  (의존)
-      Utils
-
-Processing(C++) ← MainWindow만 호출 (단방향)
+        ↓
+    ImageProcessingFacade / Models
+        ↓
+    NativeImageProcessingBridge (P/Invoke)
+        ↓
+    ImageProcessingNative.dll (C++)
 ```
 
 **하위 계층이 상위(UI)를 몰라야 한다.**  
-그래야 발표에서 “객체지향 / 관심사 분리”를 설명할 수 있다.
+알고리즘 추가는 `ImageProcessingNative/src/*.cpp` 에만 하면 됨.

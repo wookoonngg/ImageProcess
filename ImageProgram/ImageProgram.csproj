@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>WpfImageProcessing</RootNamespace>
     <AssemblyName>ImageProgram</AssemblyName>
+    <!-- 네이티브 DLL(x64)과 맞춤 -->
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,8 +18,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="ImageProcessingDLL\" />
     <Folder Include="Resource\TestImages\" />
   </ItemGroup>
+
+  <!-- C++ 빌드 산출물이 있으면 exe 옆으로 복사 (없어도 C# 빌드는 성공) -->
+  <Target Name="CopyNativeDllIfExists" AfterTargets="Build">
+    <ItemGroup>
+      <_NativeDll Include="$(MSBuildThisFileDirectory)..\ImageProcessingNative\x64\$(Configuration)\ImageProcessingNative.dll" Condition="Exists('$(MSBuildThisFileDirectory)..\ImageProcessingNative\x64\$(Configuration)\ImageProcessingNative.dll')" />
+      <_NativeDll Include="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0-windows\ImageProcessingNative.dll" Condition="Exists('$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0-windows\ImageProcessingNative.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativeDll)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="'@(_NativeDll)' != ''" />
+  </Target>
 
 </Project>
