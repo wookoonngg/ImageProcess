@@ -69,6 +69,19 @@ namespace WpfImageProcessing.Controls
             RoiRectangle.Visibility = Visibility.Collapsed;
         }
 
+        /// <summary>Navigator 클릭 위치로 스크롤 이동 (이미지 좌표 기준 중앙 정렬).</summary>
+        public void NavigateToImagePoint(double imageX, double imageY, double viewportWidth, double viewportHeight, double scale)
+        {
+            if (DisplayImage.Source == null)
+                return;
+
+            double targetX = imageX * scale - viewportWidth / 2.0;
+            double targetY = imageY * scale - viewportHeight / 2.0;
+            ScrollHost.ScrollToHorizontalOffset(Math.Max(0, targetX));
+            ScrollHost.ScrollToVerticalOffset(Math.Max(0, targetY));
+            RaiseViewportChanged();
+        }
+
         public void ShowRoi(RoiData roi)
         {
             CurrentRoi = roi;
@@ -114,10 +127,25 @@ namespace WpfImageProcessing.Controls
                 ScrollHost.ReleaseMouseCapture();
 
                 Point end = e.GetPosition(DisplayImage);
+                var bmp = DisplayImage.Source as BitmapSource;
+                int imgW = bmp?.PixelWidth ?? 0;
+                int imgH = bmp?.PixelHeight ?? 0;
+
                 int x = (int)Math.Round(Math.Min(_roiStart.X, end.X));
                 int y = (int)Math.Round(Math.Min(_roiStart.Y, end.Y));
                 int w = (int)Math.Round(Math.Abs(end.X - _roiStart.X));
                 int h = (int)Math.Round(Math.Abs(end.Y - _roiStart.Y));
+
+                // 여백(이미지 밖) 선택 시 이미지 경계로 clamp
+                if (imgW > 0 && imgH > 0)
+                {
+                    int x2 = Math.Clamp(x + w, 0, imgW);
+                    int y2 = Math.Clamp(y + h, 0, imgH);
+                    x = Math.Clamp(x, 0, imgW - 1);
+                    y = Math.Clamp(y, 0, imgH - 1);
+                    w = Math.Max(0, x2 - x);
+                    h = Math.Max(0, y2 - y);
+                }
 
                 if (w > 2 && h > 2)
                 {

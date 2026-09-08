@@ -52,4 +52,25 @@
     <Style TargetType="MenuItem">
         <Setter Property="Foreground" Value="{DynamicResource AppForeground}"/>
     </Style>
+
+    <!-- 비교 방식 선택 강조 -->
+    <Style x:Key="MethodSelectButton" TargetType="ToggleButton" BasedOn="{StaticResource ToggleButtonMedium}">
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Margin" Value="0,2"/>
+        <Style.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="#0A84FF"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="PanelHintText" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#88C0D0"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Opacity" Value="0.9"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
 </ResourceDictionary>

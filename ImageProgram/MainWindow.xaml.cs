@@ -28,6 +28,9 @@ namespace WpfImageProcessing
         private RoiData? _currentRoi;
         private TemplateData? _templateData;
         private bool _isOpening;
+        private PixelBuffer? _workBuffer;
+        private double? _lastMatchScore;
+        private MatchingMethod _selectedMethod = MatchingMethod.Coeff;
 
         public MainWindow()
         {
@@ -39,11 +42,18 @@ namespace WpfImageProcessing
 
             SourceViewer.ViewportChanged += (_, e) => Navigator.UpdateViewport(e);
             SourceViewer.RoiSelected += OnRoiSelected;
+            Navigator.NavigateRequested += OnNavigatorNavigate;
+            ResetMatchUi();
 
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Open, (_, _) => OpenImage()));
             CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => SaveImage()));
             InputBindings.Add(new KeyBinding(ApplicationCommands.Open, Key.O, ModifierKeys.Control));
             InputBindings.Add(new KeyBinding(ApplicationCommands.Save, Key.S, ModifierKeys.Control));
+        }
+
+        private void OnNavigatorNavigate(object? sender, NavigatorNavigateEventArgs e)
+        {
+            SourceViewer.NavigateToImagePoint(e.ImageX, e.ImageY, e.ViewportWidth, e.ViewportHeight, e.Scale);
         }
 
         #region File
@@ -84,7 +94,9 @@ namespace WpfImageProcessing
                 _sourceImage?.Dispose();
                 _resultImage?.Dispose();
                 _sourceBuffer = null;
+                _workBuffer = null;
                 _templateData = null;
+                _lastMatchScore = null;
                 _currentRoi = null;
 
                 StatusText.Text = "헤더 읽는 중...";
@@ -105,6 +117,9 @@ namespace WpfImageProcessing
                     var sw = Stopwatch.StartNew();
                     var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
                     displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
+                    // 대용량: 원본 전체가 아니라 Preview 표시분으로 처리 버퍼 생성
+                    _sourceBuffer = await Task.Run(() => PixelBuffer.FromBgra32(pixels, w, h));
+                    _workBuffer = _sourceBuffer.Clone();
                     sw.Stop();
                     ProcessingTimeText.Text = $"Processing Time: {sw.ElapsedMilliseconds} ms (Preview)";
                 }
@@ -118,19 +133,30 @@ namespace WpfImageProcessing
                     {
                         var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
                         displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
+                        _sourceBuffer = await Task.Run(() => PixelBuffer.FromBgra32(pixels, w, h));
+                        _workBuffer = _sourceBuffer.Clone();
+                        _isPreviewMode = true;
                     }
 
-                    try
+                    if (!_isPreviewMode)
                     {
-                        Bitmap bitmap = await Task.Run(() => _imageFileService.LoadImage(filePath));
-                        _sourceImage = new ImageData { SourceFilePath = filePath, PixelData = bitmap };
-                        _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
-                        _sourceBuffer = await Task.Run(() => PixelBuffer.FromBitmap(bitmap));
-                    }
-                    catch
-                    {
-                        _isPreviewMode = true;
-                        _sourceBuffer = null;
+                        try
+                        {
+                            Bitmap bitmap = await Task.Run(() => _imageFileService.LoadImage(filePath));
+                            _sourceImage = new ImageData { SourceFilePath = filePath, PixelData = bitmap };
+                            _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
+                            _sourceBuffer = await Task.Run(() => PixelBuffer.FromBitmap(bitmap));
+                            _workBuffer = _sourceBuffer.Clone();
+                        }
+                        catch
+                        {
+                            _isPreviewMode = true;
+                            if (_sourceBuffer == null)
+                            {
+                                _sourceBuffer = PixelBuffer.FromBitmapSource(displayImage);
+                                _workBuffer = _sourceBuffer.Clone();
+                            }
+                        }
                     }
                 }
 
@@ -139,16 +165,17 @@ namespace WpfImageProcessing
                 Navigator.SetPreviewImage(displayImage);
                 Histogram.Clear();
                 RoiInfoText.Text = "ROI: -";
-                MatchScoreText.Text = "Score: -";
-                MatchPositionText.Text = "Position: -";
+                ResetMatchUi();
 
                 StatusText.Text = _isPreviewMode
-                    ? $"Preview 모드 ({displayImage.PixelWidth}×{displayImage.PixelHeight} 표시) — 원본: {headerInfo.Width}×{headerInfo.Height}"
+                    ? $"Preview 모드 ({displayImage.PixelWidth}×{displayImage.PixelHeight} 처리 버퍼) — 원본: {headerInfo.Width}×{headerInfo.Height}"
                     : Constants.SUCCESS_FILE_OPENED;
 
                 ImageInfoText.Text =
                     $"{headerInfo.Width}×{headerInfo.Height} | {headerInfo.BitDepth}bit | " +
                     $"{FormatBytes(headerInfo.FileSize)} | {Path.GetFileName(filePath)}";
+                if (_isPreviewMode)
+                    ImageInfoText.Text += " | Preview 연산";
             }
             catch (Exception ex)
             {
@@ -274,11 +301,11 @@ namespace WpfImageProcessing
         {
             if (_currentRoi == null || !_currentRoi.IsValid())
             {
-                MessageBox.Show("먼저 ROI를 선택하세요.", "Template", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("먼저 원본 Viewer에서 ROI를 선택하세요.", "Template", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
                 return;
 
             RunWithTimer("Template 등록", () =>
@@ -286,42 +313,79 @@ namespace WpfImageProcessing
                 _templateData = _processing.RegisterTemplate(buffer, _currentRoi);
                 if (_templateData == null)
                 {
-                    StatusText.Text =
-                        $"Template ROI 확보: {_currentRoi.Width}×{_currentRoi.Height} — C++ IpExtractRoi 스텁(미구현) 또는 DLL 없음";
-                    // C++ 미구현 시에도 Matching 경로 테스트용으로 ROI 크기만 보관
-                    _templateData = new TemplateData
-                    {
-                        SourceRoi = _currentRoi,
-                        Pixels = new byte[checked(_currentRoi.Width * _currentRoi.Height)],
-                        Width = _currentRoi.Width,
-                        Height = _currentRoi.Height
-                    };
+                    // DLL 없거나 실패 시 C# fallback crop
+                    _templateData = ExtractTemplateFallback(buffer, _currentRoi);
                 }
-                else
+
+                if (_templateData == null)
                 {
-                    StatusText.Text = $"Template 등록됨: {_templateData.Width}×{_templateData.Height}";
+                    TemplateStatusText.Text = "Template: 등록 실패";
+                    MatchPanel.Visibility = Visibility.Collapsed;
+                    StatusText.Text = "Template 등록 실패";
+                    return;
                 }
+
+                TemplateStatusText.Text = $"Template: {_templateData.Width}×{_templateData.Height} 등록됨";
+                MatchPanel.Visibility = Visibility.Visible;
+                SelectMethod(MatchingMethod.Coeff);
+                StatusText.Text = "Template 등록 완료 — 비교 방식을 선택한 뒤 [비교 · 판정 실행]";
             });
+        }
+
+        private static TemplateData? ExtractTemplateFallback(PixelBuffer buffer, RoiData roi)
+        {
+            if (!roi.IsValid())
+                return null;
+
+            int x0 = Math.Clamp(roi.StartX, 0, buffer.Width - 1);
+            int y0 = Math.Clamp(roi.StartY, 0, buffer.Height - 1);
+            int w = Math.Min(roi.Width, buffer.Width - x0);
+            int h = Math.Min(roi.Height, buffer.Height - y0);
+            if (w <= 0 || h <= 0)
+                return null;
+
+            var pixels = new byte[w * h];
+            for (int y = 0; y < h; y++)
+                Buffer.BlockCopy(buffer.Data, (y0 + y) * buffer.Width + x0, pixels, y * w, w);
+
+            return new TemplateData
+            {
+                SourceRoi = new RoiData { StartX = x0, StartY = y0, Width = w, Height = h },
+                Pixels = pixels,
+                Width = w,
+                Height = h
+            };
         }
 
         private void UpdateHistogramPlaceholder(RoiData roi)
         {
-            if (_sourceBuffer != null)
+            PixelBuffer? buf = _workBuffer ?? _sourceBuffer;
+            if (buf != null)
             {
-                int[]? bins = _processing.GetHistogram(_sourceBuffer, roi);
+                int[]? bins = _processing.GetHistogram(buf, roi);
                 if (bins != null)
                 {
                     Histogram.SetHistogram(bins);
                     return;
                 }
+
+                // C# fallback histogram
+                var local = new int[256];
+                int x0 = Math.Clamp(roi.StartX, 0, buf.Width - 1);
+                int y0 = Math.Clamp(roi.StartY, 0, buf.Height - 1);
+                int x1 = Math.Min(buf.Width, roi.StartX + roi.Width);
+                int y1 = Math.Min(buf.Height, roi.StartY + roi.Height);
+                for (int y = y0; y < y1; y++)
+                {
+                    int row = y * buf.Width;
+                    for (int x = x0; x < x1; x++)
+                        local[buf.Data[row + x]]++;
+                }
+                Histogram.SetHistogram(local);
+                return;
             }
 
-            // C++ 스텁/미로드 시 자리표시용
-            var demo = new int[256];
-            int peak = Math.Clamp(roi.Width + roi.Height, 1, 255);
-            for (int i = 0; i < 256; i++)
-                demo[i] = Math.Max(0, peak - Math.Abs(i - peak / 2));
-            Histogram.SetHistogram(demo);
+            Histogram.Clear();
         }
 
         #endregion
@@ -334,14 +398,14 @@ namespace WpfImageProcessing
             RunMorphology(MorphologyOperation.Erosion);
         private void Process_Smoothing(object sender, RoutedEventArgs e)
         {
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunSmoothing(buffer, BuildParams()));
         }
 
         private void Process_Threshold(object sender, RoutedEventArgs e)
         {
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunThreshold(buffer, BuildParams()));
         }
@@ -352,53 +416,108 @@ namespace WpfImageProcessing
         private void Process_Sobel(object sender, RoutedEventArgs e) =>
             RunFilter(FilterOperation.Sobel);
 
-        private void Match_DIFF(object sender, RoutedEventArgs e) =>
-            RunMatching(MatchingMethod.Diff);
-        private void Match_CORR(object sender, RoutedEventArgs e) =>
-            RunMatching(MatchingMethod.Corr);
-        private void Match_COEFF(object sender, RoutedEventArgs e) =>
-            RunMatching(MatchingMethod.Coeff);
+        private void MethodSelect_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Primitives.ToggleButton btn || btn.Tag is null)
+                return;
+
+            var method = Enum.Parse<MatchingMethod>(btn.Tag.ToString()!);
+            SelectMethod(method);
+        }
+
+        private void SelectMethod(MatchingMethod method)
+        {
+            _selectedMethod = method;
+            MethodDiffBtn.IsChecked = method == MatchingMethod.Diff;
+            MethodCorrBtn.IsChecked = method == MatchingMethod.Corr;
+            MethodCoeffBtn.IsChecked = method == MatchingMethod.Coeff;
+            StatusText.Text = $"비교 방식: {method} 선택됨 — [비교 · 판정 실행]을 누르세요.";
+        }
+
+        private void CompareAndJudge_Click(object sender, RoutedEventArgs e)
+        {
+            if (_templateData == null)
+            {
+                MessageBox.Show("먼저 Template을 등록하세요.", "비교·판정", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
+                return;
+
+            if (!double.TryParse(PassThresholdBox.Text, out double threshold))
+            {
+                MessageBox.Show("합격 기준 Score를 숫자로 입력하세요. (예: 0.80)", "비교·판정",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            MatchingResult result = _processing.RunMatching(_selectedMethod, buffer, _templateData, null);
+            sw.Stop();
+            ProcessingTimeText.Text = $"Processing Time: {sw.ElapsedMilliseconds} ms ({_selectedMethod})";
+
+            if (!result.Success)
+            {
+                _lastMatchScore = null;
+                MatchScoreText.Text = "Score: -";
+                MatchPositionText.Text = "Position: -";
+                JudgeResultText.Text = $"판정: 비교 실패 — {result.Message}";
+                JudgeResultText.Foreground = System.Windows.Media.Brushes.Salmon;
+                StatusText.Text = JudgeResultText.Text;
+                return;
+            }
+
+            _lastMatchScore = result.Score;
+            MatchScoreText.Text = $"Score: {result.Score:F4}  ({_selectedMethod})";
+            MatchPositionText.Text = $"Position: ({result.BestX}, {result.BestY})";
+
+            bool pass = result.Score >= threshold;
+            JudgeResultText.Text = pass
+                ? $"판정: 정상 (PASS)  {result.Score:F4} ≥ {threshold:F2}"
+                : $"판정: 불량 (FAIL)  {result.Score:F4} < {threshold:F2}";
+            JudgeResultText.Foreground = pass
+                ? System.Windows.Media.Brushes.LightGreen
+                : System.Windows.Media.Brushes.Salmon;
+            StatusText.Text = JudgeResultText.Text;
+
+            // 매칭 위치를 결과 Viewer ROI로 표시
+            ResultViewer.ShowRoi(new RoiData
+            {
+                StartX = result.BestX,
+                StartY = result.BestY,
+                Width = _templateData.Width,
+                Height = _templateData.Height
+            });
+        }
+
+        private void ResetMatchUi()
+        {
+            _templateData = null;
+            _lastMatchScore = null;
+            TemplateStatusText.Text = "Template: 미등록";
+            MatchPanel.Visibility = Visibility.Collapsed;
+            MatchScoreText.Text = "Score: -";
+            MatchPositionText.Text = "Position: -";
+            JudgeResultText.Text = "판정: -";
+            JudgeResultText.Foreground = System.Windows.Media.Brushes.White;
+            MethodDiffBtn.IsChecked = false;
+            MethodCorrBtn.IsChecked = false;
+            MethodCoeffBtn.IsChecked = false;
+        }
 
         private void RunMorphology(MorphologyOperation op)
         {
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunMorphology(op, buffer, BuildParams()));
         }
 
         private void RunFilter(FilterOperation op)
         {
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
+            if (!TryGetWorkBuffer(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunFilter(op, buffer, BuildParams()));
-        }
-
-        private void RunMatching(MatchingMethod method)
-        {
-            if (_templateData == null)
-            {
-                MessageBox.Show("먼저 Template을 등록하세요.", method.ToString(),
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!TryGetSourceBuffer(out PixelBuffer buffer))
-                return;
-
-            MatchingResult result = _processing.RunMatching(method, buffer, _templateData, _currentRoi);
-            ProcessingTimeText.Text = $"Processing Time: - ms (Template {method})";
-            if (result.Success)
-            {
-                MatchScoreText.Text = $"Score: {result.Score:F4}";
-                MatchPositionText.Text = $"Position: ({result.BestX}, {result.BestY})";
-                StatusText.Text = $"Template Matching {method} OK";
-            }
-            else
-            {
-                MatchScoreText.Text = "Score: -";
-                MatchPositionText.Text = "Position: -";
-                StatusText.Text = $"Template Matching {method}: {result.Message}";
-            }
         }
 
         private void ApplyProcessingResult(ProcessingResult result)
@@ -411,6 +530,8 @@ namespace WpfImageProcessing
             }
 
             var outBuffer = new PixelBuffer(result.OutputPixels, result.Width, result.Height);
+            _workBuffer = outBuffer;
+
             using Bitmap bmp = outBuffer.ToBitmap();
             BitmapSource display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
             ResultViewer.SetImage(display);
@@ -421,7 +542,7 @@ namespace WpfImageProcessing
                 SourceFilePath = _currentFilePath ?? "",
                 PixelData = (Bitmap)bmp.Clone()
             };
-            StatusText.Text = $"{result.OperationName} 완료";
+            StatusText.Text = $"{result.OperationName} 완료 → 다음 단계로 진행하세요.";
         }
 
         private ProcessingParams BuildParams() => new()
@@ -432,6 +553,28 @@ namespace WpfImageProcessing
             Roi = _currentRoi
         };
 
+        private bool TryGetWorkBuffer(out PixelBuffer buffer)
+        {
+            if (_workBuffer != null)
+            {
+                buffer = _workBuffer;
+                return true;
+            }
+
+            if (_sourceBuffer != null)
+            {
+                _workBuffer = _sourceBuffer.Clone();
+                buffer = _workBuffer;
+                return true;
+            }
+
+            MessageBox.Show(
+                "처리용 픽셀 버퍼가 없습니다.\n이미지를 다시 열어주세요.",
+                "영상처리", MessageBoxButton.OK, MessageBoxImage.Warning);
+            buffer = null!;
+            return false;
+        }
+
         private bool TryGetSourceBuffer(out PixelBuffer buffer)
         {
             if (_sourceBuffer != null)
@@ -441,8 +584,7 @@ namespace WpfImageProcessing
             }
 
             MessageBox.Show(
-                "처리용 픽셀 버퍼가 없습니다.\n" +
-                "작은 BMP를 열거나(전체 로드), Preview 모드에서는 C++ 연동 후 ROI 타일 처리를 사용하세요.",
+                "처리용 픽셀 버퍼가 없습니다.\n이미지를 다시 열어주세요.",
                 "영상처리", MessageBoxButton.OK, MessageBoxImage.Warning);
             buffer = null!;
             return false;
@@ -474,6 +616,7 @@ namespace WpfImageProcessing
             _sourceImage?.Dispose();
             _resultImage?.Dispose();
             _sourceBuffer = null;
+            _workBuffer = null;
             _templateData = null;
             base.OnClosed(e);
         }
@@ -481,4 +624,8 @@ namespace WpfImageProcessing
         #endregion
     }
 }
+
+
+
+
 

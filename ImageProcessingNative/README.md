@@ -1,14 +1,21 @@
-# ImageProcessingNative — C++ 영상처리 DLL (WEEK 2 골격)
+# ImageProcessingNative
 
-연산 구현은 `src/` 아래 파일에만 추가하면 됩니다. 시그니처는 `include/ImageProcessingApi.h`.
+WPF `ImageProgram.exe`와 같은 폴더의 `ImageProcessingNative.dll` 로 로드됩니다.
 
-| 파일 | 담당 |
+## 연산 파일
+
+| 파일 | 내용 |
 |------|------|
 | Morphology.cpp | 팽창 / 수축 |
-| Smoothing.cpp | 평활화 |
+| Smoothing.cpp | 평활화 (box mean) |
 | Threshold.cpp | 이진화 |
 | Filter.cpp | Gaussian / Laplacian / Sobel |
 | TemplateMatching.cpp | DIFF / CORR / COEFF |
 | Roi.cpp | ROI 추출 / Histogram |
+| include/Common.hpp | stride·ROI 공통 유틸 |
 
-빌드: Visual Studio에서 `ImageProcessingNative.vcxproj` (x64) → 산출물 `ImageProcessingNative.dll` 이 WPF exe 옆에 복사됨.
+버퍼 계약: **8bit gray, stride == width** (C# `PixelBuffer`와 동일)
+
+## 빌드
+
+Visual Studio에서 `ImageProcessingNative.vcxproj` (x64 / Debug|Release) 빌드.

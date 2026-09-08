@@ -51,6 +51,40 @@ namespace WpfImageProcessing.Native
             return new PixelBuffer(gray, w, h);
         }
 
+        /// <summary>
+        /// BGRA32 표시용 픽셀(대용량 Preview) → Gray8 처리 버퍼.
+        /// 원본 전체 대신 화면 Preview로 연산을 수행할 때 사용.
+        /// </summary>
+        public static PixelBuffer FromBgra32(byte[] bgra, int width, int height)
+        {
+            int expected = checked(width * height * 4);
+            if (bgra.Length < expected)
+                throw new ArgumentException("BGRA 버퍼 크기가 부족합니다.");
+
+            var gray = new byte[checked(width * height)];
+            for (int i = 0, p = 0; i < gray.Length; i++, p += 4)
+            {
+                byte b = bgra[p];
+                byte g = bgra[p + 1];
+                byte r = bgra[p + 2];
+                gray[i] = (byte)((r * 30 + g * 59 + b * 11) / 100);
+            }
+            return new PixelBuffer(gray, width, height);
+        }
+
+        /// <summary>WPF BitmapSource → Gray8 (표시 이미지 기준 처리용).</summary>
+        public static PixelBuffer FromBitmapSource(System.Windows.Media.Imaging.BitmapSource source)
+        {
+            var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                source, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            int w = converted.PixelWidth;
+            int h = converted.PixelHeight;
+            int stride = w * 4;
+            var bgra = new byte[checked(h * stride)];
+            converted.CopyPixels(bgra, stride, 0);
+            return FromBgra32(bgra, w, h);
+        }
+
         public Bitmap ToBitmap()
         {
             var bmp = new Bitmap(Width, Height, PixelFormat.Format24bppRgb);

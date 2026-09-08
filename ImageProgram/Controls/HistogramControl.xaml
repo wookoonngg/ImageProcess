@@ -1,15 +1,34 @@
 <UserControl x:Class="WpfImageProcessing.Controls.HistogramControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="#1E1E1E" MinHeight="120">
-    <Grid Margin="4">
+             Background="#1E1E1E" MinHeight="100">
+    <Grid Margin="4,2">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <TextBlock Text="Histogram Viewer" Foreground="#88C0D0" FontWeight="SemiBold"/>
-        <Border Grid.Row="1" BorderBrush="#4C566A" BorderThickness="1" Margin="0,4,0,0">
-            <Canvas x:Name="HistogramCanvas" ClipToBounds="True" Background="#2E3440"/>
+
+        <DockPanel>
+            <TextBlock x:Name="PeakLabel" DockPanel.Dock="Right" FontSize="11" Foreground="#EBCB8B"/>
+            <TextBlock Text="← 어두움(0)　　밝기 분포　　밝음(255) →"
+                       FontSize="11" Foreground="#88C0D0" HorizontalAlignment="Center"/>
+        </DockPanel>
+
+        <Border Grid.Row="1" BorderBrush="#4C566A" BorderThickness="1" Margin="0,4,0,0"
+                Background="#2E3440">
+            <Canvas x:Name="HistogramCanvas" ClipToBounds="True"/>
         </Border>
+
+        <Grid Grid.Row="2" Margin="0,2,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="0" FontSize="10" Foreground="#D8DEE9"/>
+            <TextBlock Grid.Column="1" Text="128" FontSize="10" Foreground="#D8DEE9" HorizontalAlignment="Center"/>
+            <TextBlock Grid.Column="2" Text="255" FontSize="10" Foreground="#D8DEE9" HorizontalAlignment="Right"/>
+        </Grid>
     </Grid>
 </UserControl>

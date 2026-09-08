@@ -33,7 +33,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <OutDir>$(SolutionDir)ImageProgram\bin\$(Configuration)\net8.0-windows\</OutDir>
+    <OutDir>$(ProjectDir)..\ImageProgram\bin\$(Configuration)\net8.0-windows\</OutDir>
     <IntDir>$(Configuration)\</IntDir>
     <TargetName>ImageProcessingNative</TargetName>
   </PropertyGroup>
@@ -71,6 +71,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\ImageProcessingApi.h" />
+    <ClInclude Include="include\Common.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\dllmain.cpp" />

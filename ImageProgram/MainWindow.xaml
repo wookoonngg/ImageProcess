@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WpfImageProcessing.Controls"
         Title="WPF 반도체 검사 영상처리"
-        Width="1440" Height="900"
+        Width="1500" Height="920"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackground}"
         Foreground="{DynamicResource AppForeground}">
@@ -27,122 +27,185 @@
                            Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
                 <TextBlock x:Name="ImageInfoText" DockPanel.Dock="Right"
                            Text="" Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
-                <TextBlock x:Name="StatusText" Text="BMP 파일을 열어주세요."
+                <TextBlock x:Name="StatusText" Text="① 원본 이미지를 열어 검사를 시작하세요."
                            Foreground="{DynamicResource AppForeground}" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
 
+        <!-- 하단 가로 Histogram (전체 폭) — 드래그로 높이 조절 -->
+        <Grid DockPanel.Dock="Bottom" Margin="0,6,0,0" MinHeight="120">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="6"/>
+                <RowDefinition x:Name="HistogramRow" Height="150" MinHeight="100"/>
+            </Grid.RowDefinitions>
+            <GridSplitter Grid.Row="0" Height="6" HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center" Background="#4C566A"
+                          ResizeDirection="Rows" ShowsPreview="True"/>
+            <GroupBox Grid.Row="1" Header="Histogram — ROI 밝기 분포 (가로축: Gray 0→255 / 세로: 픽셀 수)"
+                      Style="{StaticResource GroupBoxMedium}">
+                <controls:HistogramControl x:Name="Histogram"/>
+            </GroupBox>
+        </Grid>
+
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="260"/>
+                <ColumnDefinition x:Name="LeftCol" Width="250" MinWidth="180"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*" MinWidth="200"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*" MinWidth="200"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition x:Name="RightCol" Width="260" MinWidth="180"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 좌측 도구 패널 -->
+            <!-- ①~⑦ 파이프라인 -->
             <Border Grid.Column="0"
                     Background="{DynamicResource ContentBackground}"
-                    CornerRadius="4" Padding="6" Margin="0,0,6,0">
+                    CornerRadius="4" Padding="6">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <GroupBox Header="기본 기능" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
-                            <StackPanel>
-                                <Button Content="BMP Open" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2"
-                                        Click="OpenMenuItem_Click"/>
-                                <Button Content="BMP Save" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2"
-                                        Click="SaveMenuItem_Click"/>
-                            </StackPanel>
-                        </GroupBox>
+                        <TextBlock Text="검사 파이프라인" FontWeight="SemiBold" Margin="2,0,0,4"
+                                   Foreground="{DynamicResource AppForeground}"/>
+                        <TextBlock Style="{StaticResource PanelHintText}"
+                                   Text="위→아래 순서로 실행하세요. 드래그 핸들로 패널 폭을 조절할 수 있습니다."/>
 
-                        <GroupBox Header="ROI" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                        <GroupBox Header="① 원본 이미지 획득" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
                             <StackPanel>
-                                <ToggleButton x:Name="RoiSelectToggle" Content="ROI Select"
+                                <Button Content="이미지 열기 (BMP)" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="OpenMenuItem_Click"/>
+                                <Button Content="결과 저장 (BMP)" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="SaveMenuItem_Click"/>
+                                <ToggleButton x:Name="RoiSelectToggle" Content="관심영역(ROI) 선택"
                                               Style="{StaticResource ToggleButtonMedium}"
                                               HorizontalAlignment="Stretch" Margin="0,2"
                                               Click="RoiSelectToggle_Click"/>
-                                <Button Content="ROI Cancel" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2"
-                                        Click="RoiCancel_Click"/>
-                                <Button Content="Template 등록" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2"
-                                        Click="TemplateRegister_Click"/>
+                                <Button Content="ROI 취소" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="RoiCancel_Click"/>
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="영상처리" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                        <GroupBox Header="② 노이즈 제거" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
                             <StackPanel>
-                                <Button Content="Dilation (팽창)" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Dilation"/>
-                                <Button Content="Erosion (수축)" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Erosion"/>
-                                <Button Content="Smoothing (평활화)" Style="{StaticResource ButtonMedium}"
+                                <Button Content="가우시안 필터" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Gaussian"/>
+                                <Button Content="평활화 (Smoothing)" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Smoothing"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="③ Edge(경계) 검출" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                            <StackPanel>
+                                <Button Content="Sobel" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Sobel"/>
+                                <Button Content="Laplacian" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Laplacian"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="④ 이진화" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                            <StackPanel>
                                 <Button Content="Threshold (이진화)" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Threshold"/>
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Filter" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                        <GroupBox Header="⑤ 형태학적 처리" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
                             <StackPanel>
-                                <Button Content="Gaussian Filter" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Gaussian"/>
-                                <Button Content="Laplacian Filter" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Laplacian"/>
-                                <Button Content="Sobel Filter" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Sobel"/>
+                                <Button Content="팽창 (Dilation)" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Dilation"/>
+                                <Button Content="수축 (Erosion)" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Process_Erosion"/>
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Template Matching" Style="{StaticResource GroupBoxMedium}">
+                        <!-- ⑥+⑦ 통합: Template → 방식 선택 → 비교·판정 -->
+                        <GroupBox Header="⑥⑦ 패턴 비교 · 판정" Style="{StaticResource GroupBoxMedium}">
                             <StackPanel>
-                                <Button Content="DIFF" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Match_DIFF"/>
-                                <Button Content="CORR" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Match_CORR"/>
-                                <Button Content="COEFF" Style="{StaticResource ButtonMedium}"
-                                        HorizontalAlignment="Stretch" Margin="0,2" Click="Match_COEFF"/>
+                                <TextBlock Style="{StaticResource PanelHintText}"
+                                           Text="1) ROI 선택 → Template 등록&#x0a;2) 비교 방식 선택(색 강조)&#x0a;3) 비교·판정 실행"/>
+                                <Button Content="Template 등록" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="TemplateRegister_Click"/>
+                                <TextBlock x:Name="TemplateStatusText" Text="Template: 미등록"
+                                           Margin="0,4,0,4" FontSize="11"
+                                           Foreground="{DynamicResource AppForeground}"/>
+
+                                <StackPanel x:Name="MatchPanel" Visibility="Collapsed" Margin="0,4,0,0">
+                                    <TextBlock Text="비교 방식" FontWeight="SemiBold" Margin="0,0,0,2"
+                                               Foreground="{DynamicResource AppForeground}"/>
+                                    <ToggleButton x:Name="MethodDiffBtn" Content="DIFF (차이)"
+                                                  Style="{StaticResource MethodSelectButton}"
+                                                  Click="MethodSelect_Click" Tag="Diff"/>
+                                    <ToggleButton x:Name="MethodCorrBtn" Content="CORR (상관)"
+                                                  Style="{StaticResource MethodSelectButton}"
+                                                  Click="MethodSelect_Click" Tag="Corr"/>
+                                    <ToggleButton x:Name="MethodCoeffBtn" Content="COEFF (정규화)"
+                                                  Style="{StaticResource MethodSelectButton}"
+                                                  Click="MethodSelect_Click" Tag="Coeff"/>
+
+                                    <TextBlock Text="합격 기준 Score ≥" Margin="0,8,0,2"
+                                               Foreground="{DynamicResource AppForeground}"/>
+                                    <TextBox x:Name="PassThresholdBox" Text="0.80" Margin="0,0,0,4" Padding="4"/>
+
+                                    <Button Content="비교 · 판정 실행" Style="{StaticResource ButtonMedium}"
+                                            HorizontalAlignment="Stretch" Margin="0,2"
+                                            Click="CompareAndJudge_Click"/>
+
+                                    <TextBlock x:Name="MatchScoreText" Text="Score: -" Margin="0,8,0,0"
+                                               Foreground="{DynamicResource AppForeground}"/>
+                                    <TextBlock x:Name="MatchPositionText" Text="Position: -" Margin="0,2,0,0"
+                                               Foreground="{DynamicResource AppForeground}"/>
+                                    <TextBlock x:Name="JudgeResultText" Text="판정: -" Margin="0,6,0,0"
+                                               FontWeight="Bold" Foreground="{DynamicResource AppForeground}"/>
+                                </StackPanel>
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
 
-            <GroupBox Grid.Column="1" Header="Image Viewer 1 (원본)"
-                      Style="{StaticResource GroupBoxMedium}" Margin="0,0,6,0" Padding="4">
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                          Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
+
+            <GroupBox Grid.Column="2" Header="원본 Viewer (확대·이동·ROI)"
+                      Style="{StaticResource GroupBoxMedium}" Padding="4">
                 <controls:ImageViewerControl x:Name="SourceViewer"/>
             </GroupBox>
 
-            <GroupBox Grid.Column="2" Header="Image Viewer 2 (처리 결과)"
-                      Style="{StaticResource GroupBoxMedium}" Margin="0,0,6,0" Padding="4">
+            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch"
+                          Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
+
+            <GroupBox Grid.Column="4" Header="처리 결과 Viewer"
+                      Style="{StaticResource GroupBoxMedium}" Padding="4">
                 <controls:ImageViewerControl x:Name="ResultViewer"/>
             </GroupBox>
 
-            <Grid Grid.Column="3">
+            <GridSplitter Grid.Column="5" Width="6" HorizontalAlignment="Stretch"
+                          Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
+
+            <!-- 우측: Navigator + ROI 정보 (세로 분할 가능) -->
+            <Grid Grid.Column="6">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="200"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" MinHeight="140"/>
+                    <RowDefinition Height="6"/>
+                    <RowDefinition Height="Auto" MinHeight="80"/>
                 </Grid.RowDefinitions>
 
-                <GroupBox Header="Navigator" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,6">
-                    <controls:NavigatorControl x:Name="Navigator"/>
+                <GroupBox Header="Navigator — 전체 위치 미리보기" Style="{StaticResource GroupBoxMedium}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource PanelHintText}"
+                                   Text="파란 박스 = 원본 Viewer가 보고 있는 영역.&#x0a;이미지(여백 제외)를 클릭하면 Viewer가 그 위치로 이동합니다."/>
+                        <controls:NavigatorControl x:Name="Navigator"/>
+                    </DockPanel>
                 </GroupBox>
 
-                <GroupBox Grid.Row="1" Header="Histogram Viewer"
-                          Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,6">
-                    <controls:HistogramControl x:Name="Histogram"/>
-                </GroupBox>
+                <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
+                              Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
 
-                <GroupBox Grid.Row="2" Header="Matching 결과" Style="{StaticResource GroupBoxMedium}">
+                <GroupBox Grid.Row="2" Header="ROI 정보" Style="{StaticResource GroupBoxMedium}">
                     <StackPanel Margin="6">
-                        <TextBlock x:Name="MatchScoreText" Text="Score: -"
-                                   Foreground="{DynamicResource AppForeground}"/>
-                        <TextBlock x:Name="MatchPositionText" Text="Position: -" Margin="0,4,0,0"
-                                   Foreground="{DynamicResource AppForeground}"/>
-                        <TextBlock x:Name="RoiInfoText" Text="ROI: -" Margin="0,8,0,0"
+                        <TextBlock Style="{StaticResource PanelHintText}"
+                                   Text="원본 Viewer에서 ROI를 드래그하면 좌표가 표시되고, 하단 Histogram이 갱신됩니다."/>
+                        <TextBlock x:Name="RoiInfoText" Text="ROI: -"
                                    Foreground="{DynamicResource AppForeground}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </GroupBox>
