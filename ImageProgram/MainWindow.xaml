@@ -32,21 +32,6 @@
             </DockPanel>
         </Border>
 
-        <!-- 하단 가로 Histogram (전체 폭) — 드래그로 높이 조절 -->
-        <Grid DockPanel.Dock="Bottom" Margin="0,6,0,0" MinHeight="120">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="6"/>
-                <RowDefinition x:Name="HistogramRow" Height="150" MinHeight="100"/>
-            </Grid.RowDefinitions>
-            <GridSplitter Grid.Row="0" Height="6" HorizontalAlignment="Stretch"
-                          VerticalAlignment="Center" Background="#4C566A"
-                          ResizeDirection="Rows" ShowsPreview="True"/>
-            <GroupBox Grid.Row="1" Header="Histogram — ROI 밝기 분포 (가로축: Gray 0→255 / 세로: 픽셀 수)"
-                      Style="{StaticResource GroupBoxMedium}">
-                <controls:HistogramControl x:Name="Histogram"/>
-            </GroupBox>
-        </Grid>
-
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="LeftCol" Width="250" MinWidth="180"/>
@@ -182,12 +167,14 @@
             <GridSplitter Grid.Column="5" Width="6" HorizontalAlignment="Stretch"
                           Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
 
-            <!-- 우측: Navigator + ROI 정보 (세로 분할 가능) -->
+            <!-- 우측: Navigator → Histogram → ROI (세로 분할 가능) -->
             <Grid Grid.Column="6">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="200" MinHeight="120"/>
+                    <RowDefinition Height="6"/>
                     <RowDefinition Height="*" MinHeight="140"/>
                     <RowDefinition Height="6"/>
-                    <RowDefinition Height="Auto" MinHeight="80"/>
+                    <RowDefinition Height="Auto" MinHeight="70"/>
                 </Grid.RowDefinitions>
 
                 <GroupBox Header="Navigator — 전체 위치 미리보기" Style="{StaticResource GroupBoxMedium}">
@@ -201,10 +188,18 @@
                 <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
                               Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
 
-                <GroupBox Grid.Row="2" Header="ROI 정보" Style="{StaticResource GroupBoxMedium}">
+                <GroupBox Grid.Row="2" Header="Histogram (가로 · Gray 0→255)"
+                          Style="{StaticResource GroupBoxMedium}">
+                    <controls:HistogramControl x:Name="Histogram"/>
+                </GroupBox>
+
+                <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch"
+                              Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
+
+                <GroupBox Grid.Row="4" Header="ROI 정보" Style="{StaticResource GroupBoxMedium}">
                     <StackPanel Margin="6">
                         <TextBlock Style="{StaticResource PanelHintText}"
-                                   Text="원본 Viewer에서 ROI를 드래그하면 좌표가 표시되고, 하단 Histogram이 갱신됩니다."/>
+                                   Text="원본 Viewer에서 ROI를 드래그하면 좌표와 위 Histogram이 갱신됩니다."/>
                         <TextBlock x:Name="RoiInfoText" Text="ROI: -"
                                    Foreground="{DynamicResource AppForeground}" FontWeight="SemiBold"/>
                     </StackPanel>

@@ -47,14 +47,23 @@ typedef struct IpMatchResult
 IP_API int IpDilation(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, const IpRoi* roi);
 IP_API int IpErosion(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, const IpRoi* roi);
 
+
+
+
+
+
 // ----- Smoothing / Threshold -----
 IP_API int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, const IpRoi* roi);
 IP_API int IpThreshold(const unsigned char* src, unsigned char* dst, int width, int height, int thresholdValue, const IpRoi* roi);
+
+
 
 // ----- Filters -----
 IP_API int IpGaussian(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, double sigma, const IpRoi* roi);
 IP_API int IpLaplacian(const unsigned char* src, unsigned char* dst, int width, int height, const IpRoi* roi);
 IP_API int IpSobel(const unsigned char* src, unsigned char* dst, int width, int height, const IpRoi* roi);
+
+
 
 // ----- Template Matching -----
 // method: 0=DIFF, 1=CORR, 2=COEFF
@@ -65,13 +74,21 @@ IP_API int IpTemplateMatch(
     IpMatchResult* outResult,
     const IpRoi* searchRoi);
 
+
+
+
 // ----- ROI helpers -----
 IP_API int IpExtractRoi(
+
     const unsigned char* src, int srcWidth, int srcHeight,
     const IpRoi* roi,
     unsigned char* dst, int dstCapacityBytes);
 
+
+
+
 IP_API int IpComputeHistogram(
+
     const unsigned char* src, int width, int height,
     const IpRoi* roi,
     int* bins256);
