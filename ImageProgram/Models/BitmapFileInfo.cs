@@ -11,6 +11,8 @@ namespace WpfImageProcessing.Models
     /// - DTO (Data Transfer Object) 패턴 적용
     /// - 검증 로직은 최소화 (Service에서 담당)
     /// </summary>
+    /// 
+
     public class BitmapFileInfo
     {
         #region Properties
@@ -74,6 +76,7 @@ namespace WpfImageProcessing.Models
         /// - 비트 깊이가 지원하는 값
         /// - 압축 방식이 지원하는 형식
         /// </summary>
+        
         public bool IsValid()
         {
             // 크기 검증
@@ -112,6 +115,9 @@ namespace WpfImageProcessing.Models
         /// - BMP 헤더의 파일 크기 필드는 32비트 정수 (4GB 오버플로우 가능)
         /// - 실제 데이터 크기는 이 공식으로 계산해야 함
         /// </summary>
+        
+
+
         public long GetActualPixelDataSize()
         {
             // 한 행의 바이트 수 (4바이트 경계에 정렬)
@@ -208,7 +214,17 @@ namespace WpfImageProcessing.Models
                 FileInfo = null,
                 ErrorMessage = errorMessage,
                 ElapsedTime = elapsedTime
+
+
+
+
             };
+
         }
+
     }
+
+
+
 }
+

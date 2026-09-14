@@ -4,8 +4,13 @@
 #include <algorithm>
 #include <cstring>
 
+
+
+
 // C# PixelBuffer 계약: stride == width (패딩 없음)
 inline int IpStride(int width) { return width; }
+
+
 
 inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, int height)
 {
@@ -16,8 +21,7 @@ inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, 
     return true;
 }
 
-inline void IpResolveRoi(const IpRoi* roi, int width, int height,
-                         int& startX, int& startY, int& endX, int& endY)
+inline void IpResolveRoi(const IpRoi* roi, int width, int height, int& startX, int& startY, int& endX, int& endY)
 {
     startX = 0;
     startY = 0;
@@ -39,6 +43,9 @@ inline void IpResolveRoi(const IpRoi* roi, int width, int height,
         endX = width;
         endY = height;
     }
+
+
+
 }
 
 inline void IpCopyImage(const unsigned char* src, unsigned char* dst, int width, int height)

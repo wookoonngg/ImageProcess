@@ -5,9 +5,13 @@ using WpfImageProcessing.Native;
 namespace WpfImageProcessing.Services.Processing
 {
     /// <summary>
-    /// P/Invoke 브리지. C++ 스텁은 IP_ERR_NOT_IMPLEMENTED를 반환한다.
+    /// 인보크 브리지 
     /// DLL이 없으면 IsNativeAvailable=false 이고 호출 시 안내 메시지 반환.
     /// </summary>
+    /// 
+
+
+
     public sealed class NativeImageProcessingBridge : IImageProcessingBridge
     {
         private readonly ILogger _logger;

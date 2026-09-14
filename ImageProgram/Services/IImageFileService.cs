@@ -10,6 +10,7 @@ namespace WpfImageProcessing.Services
     {
         BitmapFileInfo ReadHeader(string filePath);
         Bitmap LoadImage(string filePath);
+
         void SaveImage(Bitmap bitmap, string filePath, bool overwrite = true);
     }
 }

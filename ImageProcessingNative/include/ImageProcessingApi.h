@@ -1,10 +1,10 @@
-#pragma once
+    #pragma once
 
-// ImageProcessingNative — C API for WPF P/Invoke
-// WEEK 2: signatures only / empty stubs. Algorithms filled later (no OpenCV).
-//
-// Buffer convention:
-//   - 8-bit grayscale, row-major, no row padding (stride == width)
+    // ImageProcessingNative — C API for WPF P/Invoke
+    // WEEK 2: signatures only / empty stubs. Algorithms filled later (no OpenCV).
+    //
+    // Buffer convention:
+    //   - 8-bit grayscale, row-major, no row padding (stride == width)
 //   - ROI is inclusive of (x,y) with size (width,height) in image coordinates
 //
 // Return codes: 0 = OK, negative = error (see IpStatus)

@@ -13,12 +13,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AtiWpf.Ui" Version="1.0.52" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+    <Compile Remove="Resource\TestImages\**" />
+    <EmbeddedResource Remove="Resource\TestImages\**" />
+    <None Remove="Resource\TestImages\**" />
+    <Page Remove="Resource\TestImages\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Resource\TestImages\" />
+    <PackageReference Include="AtiWpf.Ui" Version="1.0.52" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
   </ItemGroup>
 
   <!-- C++ 빌드 산출물이 있으면 exe 옆으로 복사 (없어도 C# 빌드는 성공) -->

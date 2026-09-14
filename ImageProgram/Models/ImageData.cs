@@ -21,15 +21,20 @@ namespace WpfImageProcessing.Models
         /// </summary>
         public Guid Id { get; private set; }
 
+
         /// <summary>
         /// 원본 파일 경로
         /// </summary>
         public string SourceFilePath { get; set; }
 
+
+
         /// <summary>
         /// 로드된 이미지의 Bitmap 객체
         /// </summary>
         public Bitmap PixelData { get; set; }
+
+
 
         /// <summary>
         /// 이미지 너비 (픽셀)
