@@ -11,11 +11,16 @@
                       PreviewMouseLeftButtonUp="ScrollHost_PreviewMouseLeftButtonUp"
                       PreviewMouseMove="ScrollHost_PreviewMouseMove"
                       ScrollChanged="ScrollHost_ScrollChanged">
-            <Grid x:Name="ImageContainer">
+            <Grid x:Name="ImageContainer"
+                  HorizontalAlignment="Left" VerticalAlignment="Top">
                 <Image x:Name="DisplayImage"
                        Stretch="None"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"
                        RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                <Canvas x:Name="RoiCanvas" IsHitTestVisible="False">
+                <Canvas x:Name="RoiCanvas"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Background="Transparent">
                     <Rectangle x:Name="RoiRectangle"
                                Stroke="#EBCB8B" StrokeThickness="2"
                                Fill="#33EBCB8B"

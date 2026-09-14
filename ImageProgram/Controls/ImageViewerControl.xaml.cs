@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using WpfImageProcessing.Models;
 
 namespace WpfImageProcessing.Controls
@@ -12,10 +11,11 @@ namespace WpfImageProcessing.Controls
     {
         private Point _panStart;
         private Point _scrollStart;
-        private Point _roiStart;
+        private Point _roiStartPx;
         private bool _isPanning;
         private bool _isSelectingRoi;
         private bool _roiSelectMode;
+        private bool _suppressViewportEvent;
 
         public static readonly DependencyProperty TitleProperty =
             DependencyProperty.Register(nameof(Title), typeof(string), typeof(ImageViewerControl),
@@ -39,28 +39,45 @@ namespace WpfImageProcessing.Controls
 
         public RoiData? CurrentRoi { get; private set; }
 
+        public double CurrentScale =>
+            (ImageContainer.LayoutTransform as ScaleTransform)?.ScaleX ?? 1.0;
+
         public event EventHandler<ViewportChangedEventArgs>? ViewportChanged;
         public event EventHandler<RoiData>? RoiSelected;
 
         public ImageViewerControl()
         {
             InitializeComponent();
+            DisplayImage.SizeChanged += (_, _) => SyncRoiCanvasSize();
         }
 
-        public void SetImage(BitmapSource? image)
+        public void SetImage(BitmapSource? image, bool preserveView = false)
         {
+            double scale = CurrentScale;
+            double ox = ScrollHost.HorizontalOffset;
+            double oy = ScrollHost.VerticalOffset;
+            var roi = CurrentRoi;
+
             DisplayImage.Source = image;
-            ClearRoi();
-            ResetView();
+            SyncRoiCanvasSize();
+
+            if (!preserveView || image == null)
+            {
+                ClearRoi();
+                ResetView();
+                return;
+            }
+
+            ApplyViewState(scale, ox, oy, raiseEvent: false);
+            if (roi != null && roi.IsValid())
+                ShowRoi(roi);
+            else
+                ClearRoi();
         }
 
         public void ResetView()
         {
-            ImageContainer.LayoutTransform = new ScaleTransform(1, 1);
-            ScrollHost.ScrollToHorizontalOffset(0);
-            ScrollHost.ScrollToVerticalOffset(0);
-            UpdateZoomLabel();
-            RaiseViewportChanged();
+            ApplyViewState(1.0, 0, 0, raiseEvent: true);
         }
 
         public void ClearRoi()
@@ -69,7 +86,21 @@ namespace WpfImageProcessing.Controls
             RoiRectangle.Visibility = Visibility.Collapsed;
         }
 
-        /// <summary>Navigator 클릭 위치로 스크롤 이동 (이미지 좌표 기준 중앙 정렬).</summary>
+        public void ShowRoi(RoiData roi)
+        {
+            CurrentRoi = roi;
+            UpdateRoiVisual(roi.StartX, roi.StartY, roi.Width, roi.Height);
+        }
+
+        /// <summary>다른 Viewer / Navigator와 줌·스크롤 상태를 맞춘다.</summary>
+        public void SyncViewport(ViewportChangedEventArgs viewport)
+        {
+            if (DisplayImage.Source == null)
+                return;
+
+            ApplyViewState(viewport.Scale, viewport.ScrollOffsetX, viewport.ScrollOffsetY, raiseEvent: false);
+        }
+
         public void NavigateToImagePoint(double imageX, double imageY, double viewportWidth, double viewportHeight, double scale)
         {
             if (DisplayImage.Source == null)
@@ -77,15 +108,70 @@ namespace WpfImageProcessing.Controls
 
             double targetX = imageX * scale - viewportWidth / 2.0;
             double targetY = imageY * scale - viewportHeight / 2.0;
-            ScrollHost.ScrollToHorizontalOffset(Math.Max(0, targetX));
-            ScrollHost.ScrollToVerticalOffset(Math.Max(0, targetY));
-            RaiseViewportChanged();
+            ApplyViewState(scale, Math.Max(0, targetX), Math.Max(0, targetY), raiseEvent: true);
         }
 
-        public void ShowRoi(RoiData roi)
+        private void ApplyViewState(double scale, double offsetX, double offsetY, bool raiseEvent)
         {
-            CurrentRoi = roi;
-            UpdateRoiVisual(roi.StartX, roi.StartY, roi.Width, roi.Height);
+            _suppressViewportEvent = true;
+            try
+            {
+                scale = Math.Clamp(scale, 0.1, 20.0);
+                ImageContainer.LayoutTransform = new ScaleTransform(scale, scale);
+                ScrollHost.UpdateLayout();
+                ScrollHost.ScrollToHorizontalOffset(offsetX);
+                ScrollHost.ScrollToVerticalOffset(offsetY);
+                UpdateZoomLabel();
+            }
+            finally
+            {
+                _suppressViewportEvent = false;
+            }
+
+            if (raiseEvent)
+                RaiseViewportChanged();
+        }
+
+        private void SyncRoiCanvasSize()
+        {
+            if (DisplayImage.Source is BitmapSource bmp)
+            {
+                RoiCanvas.Width = bmp.PixelWidth;
+                RoiCanvas.Height = bmp.PixelHeight;
+            }
+            else
+            {
+                RoiCanvas.Width = DisplayImage.ActualWidth;
+                RoiCanvas.Height = DisplayImage.ActualHeight;
+            }
+        }
+
+        /// <summary>
+        /// 마우스 → 이미지 픽셀 좌표.
+        /// LayoutTransform 줌 + ScrollViewer 오프셋을 직접 반영해 커서와 ROI가 일치하도록 한다.
+        /// </summary>
+        private Point GetImagePixelPoint(MouseEventArgs e)
+        {
+            double scale = Math.Max(CurrentScale, 1e-6);
+            Point p = e.GetPosition(ScrollHost);
+            double x = (ScrollHost.HorizontalOffset + p.X) / scale;
+            double y = (ScrollHost.VerticalOffset + p.Y) / scale;
+            return new Point(x, y);
+        }
+
+        private void ClampToImage(ref int x, ref int y, ref int w, ref int h)
+        {
+            if (DisplayImage.Source is not BitmapSource bmp)
+                return;
+
+            int imgW = bmp.PixelWidth;
+            int imgH = bmp.PixelHeight;
+            int x2 = Math.Clamp(x + w, 0, imgW);
+            int y2 = Math.Clamp(y + h, 0, imgH);
+            x = Math.Clamp(x, 0, Math.Max(0, imgW - 1));
+            y = Math.Clamp(y, 0, Math.Max(0, imgH - 1));
+            w = Math.Max(0, x2 - x);
+            h = Math.Max(0, y2 - y);
         }
 
         private void ScrollHost_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -106,10 +192,11 @@ namespace WpfImageProcessing.Controls
             if (RoiSelectMode)
             {
                 _isSelectingRoi = true;
-                _roiStart = e.GetPosition(DisplayImage);
+                _roiStartPx = GetImagePixelPoint(e);
                 RoiRectangle.Visibility = Visibility.Visible;
-                UpdateRoiVisual(_roiStart.X, _roiStart.Y, 0, 0);
+                UpdateRoiVisual(_roiStartPx.X, _roiStartPx.Y, 0, 0);
                 ScrollHost.CaptureMouse();
+                e.Handled = true;
                 return;
             }
 
@@ -126,26 +213,12 @@ namespace WpfImageProcessing.Controls
                 _isSelectingRoi = false;
                 ScrollHost.ReleaseMouseCapture();
 
-                Point end = e.GetPosition(DisplayImage);
-                var bmp = DisplayImage.Source as BitmapSource;
-                int imgW = bmp?.PixelWidth ?? 0;
-                int imgH = bmp?.PixelHeight ?? 0;
-
-                int x = (int)Math.Round(Math.Min(_roiStart.X, end.X));
-                int y = (int)Math.Round(Math.Min(_roiStart.Y, end.Y));
-                int w = (int)Math.Round(Math.Abs(end.X - _roiStart.X));
-                int h = (int)Math.Round(Math.Abs(end.Y - _roiStart.Y));
-
-                // 여백(이미지 밖) 선택 시 이미지 경계로 clamp
-                if (imgW > 0 && imgH > 0)
-                {
-                    int x2 = Math.Clamp(x + w, 0, imgW);
-                    int y2 = Math.Clamp(y + h, 0, imgH);
-                    x = Math.Clamp(x, 0, imgW - 1);
-                    y = Math.Clamp(y, 0, imgH - 1);
-                    w = Math.Max(0, x2 - x);
-                    h = Math.Max(0, y2 - y);
-                }
+                Point end = GetImagePixelPoint(e);
+                int x = (int)Math.Floor(Math.Min(_roiStartPx.X, end.X));
+                int y = (int)Math.Floor(Math.Min(_roiStartPx.Y, end.Y));
+                int w = (int)Math.Ceiling(Math.Abs(end.X - _roiStartPx.X));
+                int h = (int)Math.Ceiling(Math.Abs(end.Y - _roiStartPx.Y));
+                ClampToImage(ref x, ref y, ref w, ref h);
 
                 if (w > 2 && h > 2)
                 {
@@ -157,6 +230,8 @@ namespace WpfImageProcessing.Controls
                 {
                     ClearRoi();
                 }
+
+                e.Handled = true;
                 return;
             }
 
@@ -171,11 +246,11 @@ namespace WpfImageProcessing.Controls
         {
             if (_isSelectingRoi)
             {
-                Point current = e.GetPosition(DisplayImage);
-                int x = (int)Math.Round(Math.Min(_roiStart.X, current.X));
-                int y = (int)Math.Round(Math.Min(_roiStart.Y, current.Y));
-                int w = (int)Math.Round(Math.Abs(current.X - _roiStart.X));
-                int h = (int)Math.Round(Math.Abs(current.Y - _roiStart.Y));
+                Point current = GetImagePixelPoint(e);
+                double x = Math.Min(_roiStartPx.X, current.X);
+                double y = Math.Min(_roiStartPx.Y, current.Y);
+                double w = Math.Abs(current.X - _roiStartPx.X);
+                double h = Math.Abs(current.Y - _roiStartPx.Y);
                 UpdateRoiVisual(x, y, w, h);
                 return;
             }
@@ -190,6 +265,7 @@ namespace WpfImageProcessing.Controls
 
         private void UpdateRoiVisual(double x, double y, double w, double h)
         {
+            SyncRoiCanvasSize();
             Canvas.SetLeft(RoiRectangle, x);
             Canvas.SetTop(RoiRectangle, y);
             RoiRectangle.Width = Math.Max(w, 1);
@@ -197,39 +273,38 @@ namespace WpfImageProcessing.Controls
             RoiRectangle.Visibility = Visibility.Visible;
         }
 
-        private void ScrollHost_ScrollChanged(object sender, ScrollChangedEventArgs e) => RaiseViewportChanged();
-
-        private void ApplyZoom(double factor, Point anchor)
+        private void ScrollHost_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
-            var transform = ImageContainer.LayoutTransform as ScaleTransform ?? new ScaleTransform(1, 1);
-            double newScale = Math.Clamp(transform.ScaleX * factor, 0.1, 20.0);
-            double ratio = newScale / transform.ScaleX;
-
-            ScrollHost.UpdateLayout();
-            double offsetX = ScrollHost.HorizontalOffset + anchor.X;
-            double offsetY = ScrollHost.VerticalOffset + anchor.Y;
-
-            ImageContainer.LayoutTransform = new ScaleTransform(newScale, newScale);
-            ScrollHost.UpdateLayout();
-            ScrollHost.ScrollToHorizontalOffset(offsetX * ratio - anchor.X);
-            ScrollHost.ScrollToVerticalOffset(offsetY * ratio - anchor.Y);
-
-            UpdateZoomLabel();
+            if (_suppressViewportEvent)
+                return;
+            if (e.HorizontalChange == 0 && e.VerticalChange == 0 && e.ExtentWidthChange == 0 && e.ExtentHeightChange == 0)
+                return;
             RaiseViewportChanged();
+        }
+
+        private void ApplyZoom(double factor, Point anchorInScrollHost)
+        {
+            double oldScale = CurrentScale;
+            double newScale = Math.Clamp(oldScale * factor, 0.1, 20.0);
+            double ratio = newScale / oldScale;
+
+            ScrollHost.UpdateLayout();
+            double offsetX = (ScrollHost.HorizontalOffset + anchorInScrollHost.X) * ratio - anchorInScrollHost.X;
+            double offsetY = (ScrollHost.VerticalOffset + anchorInScrollHost.Y) * ratio - anchorInScrollHost.Y;
+
+            ApplyViewState(newScale, offsetX, offsetY, raiseEvent: true);
         }
 
         private void UpdateZoomLabel()
         {
-            double scale = (ImageContainer.LayoutTransform as ScaleTransform)?.ScaleX ?? 1.0;
-            ZoomLabel.Text = $"{scale * 100:F0}%";
+            ZoomLabel.Text = $"{CurrentScale * 100:F0}%";
         }
 
         private void RaiseViewportChanged()
         {
-            if (DisplayImage.Source == null)
+            if (_suppressViewportEvent || DisplayImage.Source == null)
                 return;
 
-            double scale = (ImageContainer.LayoutTransform as ScaleTransform)?.ScaleX ?? 1.0;
             double imageWidth = DisplayImage.Source is BitmapSource bs ? bs.PixelWidth : DisplayImage.Source.Width;
             double imageHeight = DisplayImage.Source is BitmapSource bs2 ? bs2.PixelHeight : DisplayImage.Source.Height;
 
@@ -241,7 +316,7 @@ namespace WpfImageProcessing.Controls
                 ViewportHeight = ScrollHost.ViewportHeight,
                 ScrollOffsetX = ScrollHost.HorizontalOffset,
                 ScrollOffsetY = ScrollHost.VerticalOffset,
-                Scale = scale
+                Scale = CurrentScale
             });
         }
     }

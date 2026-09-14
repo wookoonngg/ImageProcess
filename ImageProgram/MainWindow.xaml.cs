@@ -31,6 +31,7 @@ namespace WpfImageProcessing
         private PixelBuffer? _workBuffer;
         private double? _lastMatchScore;
         private MatchingMethod _selectedMethod = MatchingMethod.Coeff;
+        private bool _syncingViewers;
 
         public MainWindow()
         {
@@ -40,7 +41,8 @@ namespace WpfImageProcessing
             _imageFileService = new ImageFileService(_logger);
             _processing = new ImageProcessingFacade(new NativeImageProcessingBridge(_logger));
 
-            SourceViewer.ViewportChanged += (_, e) => Navigator.UpdateViewport(e);
+            SourceViewer.ViewportChanged += OnSourceViewportChanged;
+            ResultViewer.ViewportChanged += OnResultViewportChanged;
             SourceViewer.RoiSelected += OnRoiSelected;
             Navigator.NavigateRequested += OnNavigatorNavigate;
             ResetMatchUi();
@@ -54,6 +56,41 @@ namespace WpfImageProcessing
         private void OnNavigatorNavigate(object? sender, NavigatorNavigateEventArgs e)
         {
             SourceViewer.NavigateToImagePoint(e.ImageX, e.ImageY, e.ViewportWidth, e.ViewportHeight, e.Scale);
+            // SourceViewportChanged가 Result/Navigator를 맞춤
+        }
+
+        private void OnSourceViewportChanged(object? sender, ViewportChangedEventArgs e)
+        {
+            if (_syncingViewers)
+                return;
+
+            _syncingViewers = true;
+            try
+            {
+                ResultViewer.SyncViewport(e);
+                Navigator.UpdateViewport(e);
+            }
+            finally
+            {
+                _syncingViewers = false;
+            }
+        }
+
+        private void OnResultViewportChanged(object? sender, ViewportChangedEventArgs e)
+        {
+            if (_syncingViewers)
+                return;
+
+            _syncingViewers = true;
+            try
+            {
+                SourceViewer.SyncViewport(e);
+                Navigator.UpdateViewport(e);
+            }
+            finally
+            {
+                _syncingViewers = false;
+            }
         }
 
         #region File
@@ -281,6 +318,7 @@ namespace WpfImageProcessing
         private void RoiCancel_Click(object sender, RoutedEventArgs e)
         {
             SourceViewer.ClearRoi();
+            ResultViewer.ClearRoi();
             _currentRoi = null;
             RoiInfoText.Text = "ROI: -";
             Histogram.Clear();
@@ -292,9 +330,10 @@ namespace WpfImageProcessing
         private void OnRoiSelected(object? sender, RoiData roi)
         {
             _currentRoi = roi;
+            ResultViewer.ShowRoi(roi);
             RoiInfoText.Text = roi.ToString();
             UpdateHistogramPlaceholder(roi);
-            StatusText.Text = $"ROI 선택됨: {roi}";
+            StatusText.Text = $"ROI 선택됨: {roi} — 이후 연산은 이 영역에만 적용됩니다.";
         }
 
         private void TemplateRegister_Click(object sender, RoutedEventArgs e)
@@ -398,14 +437,14 @@ namespace WpfImageProcessing
             RunMorphology(MorphologyOperation.Erosion);
         private void Process_Smoothing(object sender, RoutedEventArgs e)
         {
-            if (!TryGetWorkBuffer(out PixelBuffer buffer))
+            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunSmoothing(buffer, BuildParams()));
         }
 
         private void Process_Threshold(object sender, RoutedEventArgs e)
         {
-            if (!TryGetWorkBuffer(out PixelBuffer buffer))
+            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunThreshold(buffer, BuildParams()));
         }
@@ -508,16 +547,30 @@ namespace WpfImageProcessing
 
         private void RunMorphology(MorphologyOperation op)
         {
-            if (!TryGetWorkBuffer(out PixelBuffer buffer))
+            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunMorphology(op, buffer, BuildParams()));
         }
 
         private void RunFilter(FilterOperation op)
         {
-            if (!TryGetWorkBuffer(out PixelBuffer buffer))
+            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
             ApplyProcessingResult(_processing.RunFilter(op, buffer, BuildParams()));
+        }
+
+        private bool TryBeginRoiProcessing(out PixelBuffer buffer)
+        {
+            buffer = null!;
+            if (_currentRoi == null || !_currentRoi.IsValid())
+            {
+                MessageBox.Show(
+                    "먼저 원본 Viewer에서 ROI를 선택하세요.\n연산은 선택된 ROI 영역에만 적용됩니다.",
+                    "ROI 필요", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            return TryGetWorkBuffer(out buffer);
         }
 
         private void ApplyProcessingResult(ProcessingResult result)
@@ -534,7 +587,14 @@ namespace WpfImageProcessing
 
             using Bitmap bmp = outBuffer.ToBitmap();
             BitmapSource display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
-            ResultViewer.SetImage(display);
+
+            // 뷰포트/줌 유지 + ROI 동기 표시
+            ResultViewer.SetImage(display, preserveView: true);
+            if (_currentRoi != null)
+            {
+                SourceViewer.ShowRoi(_currentRoi);
+                ResultViewer.ShowRoi(_currentRoi);
+            }
 
             _resultImage?.Dispose();
             _resultImage = new ImageData
@@ -542,7 +602,7 @@ namespace WpfImageProcessing
                 SourceFilePath = _currentFilePath ?? "",
                 PixelData = (Bitmap)bmp.Clone()
             };
-            StatusText.Text = $"{result.OperationName} 완료 → 다음 단계로 진행하세요.";
+            StatusText.Text = $"{result.OperationName} 완료 (ROI만 적용) → 다음 단계로 진행하세요.";
         }
 
         private ProcessingParams BuildParams() => new()
@@ -624,557 +684,3 @@ namespace WpfImageProcessing
         #endregion
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
