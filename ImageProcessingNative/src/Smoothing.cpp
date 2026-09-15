@@ -9,9 +9,11 @@ int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int hei
     if (!IpValidate(src, dst, width, height))
         return IP_ERR_NULL_PTR;
 
-    kernelSize = IpClampKernel(kernelSize);
-    const int radius = kernelSize / 2;
+    kernelSize = IpClampKernel(kernelSize); // 커널 사이즈 보정 
+
+    const int radius = kernelSize / 2; // 커널 영역
     int startX, startY, endX, endY;
+
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
     IpCopyImage(src, dst, width, height);
 
@@ -28,6 +30,9 @@ int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int hei
                 for (int kx = -radius; kx <= radius; ++kx)
                     sum += IpSample(src, x + kx, y + ky, width, height);
             }
+
+
+
             dst[y * width + x] = static_cast<unsigned char>(std::clamp(sum * invArea + 0.5f, 0.0f, 255.0f));
         }
     }

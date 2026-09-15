@@ -9,7 +9,9 @@ static double ScoreDiff(
     const unsigned char* templ, int templWidth, int templHeight,
     int ox, int oy)
 {
-    double sum = 0.0;
+    double sum = 0.0; 
+
+
     const double area = static_cast<double>(templWidth) * templHeight;
     for (int ty = 0; ty < templHeight; ++ty)
     {

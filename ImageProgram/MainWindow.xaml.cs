@@ -32,6 +32,10 @@ namespace WpfImageProcessing
         private double? _lastMatchScore;
         private MatchingMethod _selectedMethod = MatchingMethod.Coeff;
         private bool _syncingViewers;
+        private byte[]? _originalBgra;
+        private int _displayWidth;
+        private int _displayHeight;
+        private BitmapSource? _originalDisplay;
 
         public MainWindow()
         {
@@ -44,6 +48,7 @@ namespace WpfImageProcessing
             SourceViewer.ViewportChanged += OnSourceViewportChanged;
             ResultViewer.ViewportChanged += OnResultViewportChanged;
             SourceViewer.RoiSelected += OnRoiSelected;
+            ResultViewer.RoiSelected += OnRoiSelected;
             Navigator.NavigateRequested += OnNavigatorNavigate;
             ResetMatchUi();
 
@@ -55,8 +60,19 @@ namespace WpfImageProcessing
 
         private void OnNavigatorNavigate(object? sender, NavigatorNavigateEventArgs e)
         {
-            SourceViewer.NavigateToImagePoint(e.ImageX, e.ImageY, e.ViewportWidth, e.ViewportHeight, e.Scale);
-            // SourceViewportChanged가 Result/Navigator를 맞춤
+            _syncingViewers = true;
+            try
+            {
+                SourceViewer.NavigateToImagePoint(e.ImageX, e.ImageY, raiseEvent: false);
+                ResultViewer.NavigateToImagePoint(e.ImageX, e.ImageY, raiseEvent: false);
+                Navigator.UpdateViewport(SourceViewer.GetViewportState());
+            }
+            finally
+            {
+                _syncingViewers = false;
+            }
+
+            StatusText.Text = $"Navigator 이동 → 이미지 좌표 ({e.ImageX:F0}, {e.ImageY:F0})";
         }
 
         private void OnSourceViewportChanged(object? sender, ViewportChangedEventArgs e)
@@ -132,6 +148,8 @@ namespace WpfImageProcessing
                 _resultImage?.Dispose();
                 _sourceBuffer = null;
                 _workBuffer = null;
+                _originalBgra = null;
+                _originalDisplay = null;
                 _templateData = null;
                 _lastMatchScore = null;
                 _currentRoi = null;
@@ -149,16 +167,19 @@ namespace WpfImageProcessing
                     : "이미지 로드 중...";
 
                 BitmapSource displayImage;
+                _originalBgra = null;
                 if (_isPreviewMode)
                 {
                     var sw = Stopwatch.StartNew();
                     var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
                     displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
-                    // 대용량: 원본 전체가 아니라 Preview 표시분으로 처리 버퍼 생성
+                    _originalBgra = pixels;
+                    _displayWidth = w;
+                    _displayHeight = h;
                     _sourceBuffer = await Task.Run(() => PixelBuffer.FromBgra32(pixels, w, h));
                     _workBuffer = _sourceBuffer.Clone();
                     sw.Stop();
-                    ProcessingTimeText.Text = $"Processing Time: {sw.ElapsedMilliseconds} ms (Preview)";
+                    ProcessingTimeText.Text = $"Processing Time: {sw.ElapsedMilliseconds} ms (Preview Load)";
                 }
                 else
                 {
@@ -170,6 +191,9 @@ namespace WpfImageProcessing
                     {
                         var (pixels, w, h) = await Task.Run(() => BmpDisplayLoader.LoadSubsampledPixels(filePath, headerInfo));
                         displayImage = BmpDisplayLoader.CreateBgraBitmap(pixels, w, h);
+                        _originalBgra = pixels;
+                        _displayWidth = w;
+                        _displayHeight = h;
                         _sourceBuffer = await Task.Run(() => PixelBuffer.FromBgra32(pixels, w, h));
                         _workBuffer = _sourceBuffer.Clone();
                         _isPreviewMode = true;
@@ -184,6 +208,9 @@ namespace WpfImageProcessing
                             _resultImage = new ImageData { SourceFilePath = filePath, PixelData = (Bitmap)bitmap.Clone() };
                             _sourceBuffer = await Task.Run(() => PixelBuffer.FromBitmap(bitmap));
                             _workBuffer = _sourceBuffer.Clone();
+                            _displayWidth = _sourceBuffer.Width;
+                            _displayHeight = _sourceBuffer.Height;
+                            _originalBgra = BgraFromGrayBuffer(_sourceBuffer);
                         }
                         catch
                         {
@@ -193,10 +220,23 @@ namespace WpfImageProcessing
                                 _sourceBuffer = PixelBuffer.FromBitmapSource(displayImage);
                                 _workBuffer = _sourceBuffer.Clone();
                             }
+                            _displayWidth = displayImage.PixelWidth;
+                            _displayHeight = displayImage.PixelHeight;
+                            _originalBgra ??= CopyBitmapSourceToBgra(displayImage);
                         }
                     }
                 }
 
+                if (_originalBgra == null ||
+                    _displayWidth != displayImage.PixelWidth ||
+                    _displayHeight != displayImage.PixelHeight)
+                {
+                    _displayWidth = displayImage.PixelWidth;
+                    _displayHeight = displayImage.PixelHeight;
+                    _originalBgra = CopyBitmapSourceToBgra(displayImage);
+                }
+
+                _originalDisplay = displayImage;
                 SourceViewer.SetImage(displayImage);
                 ResultViewer.SetImage(displayImage);
                 Navigator.SetPreviewImage(displayImage);
@@ -247,8 +287,12 @@ namespace WpfImageProcessing
 
         private static bool NeedsPreviewMode(BitmapFileInfo info)
         {
+            // BmpDisplayLoader.Load와 동일 조건 — 표시 크기와 처리 버퍼가 어긋나면
+            // ROI 좌표가 버퍼 밖으로 나가 전체 이미지 연산으로 이어질 수 있음
             return info.FileSize > Constants.PREVIEW_MODE_BYTES ||
-                   info.GetActualPixelDataSize() > Constants.PREVIEW_MODE_BYTES;
+                   info.GetActualPixelDataSize() > Constants.PREVIEW_MODE_BYTES ||
+                   info.Width > Constants.PREVIEW_MAX_PIXEL ||
+                   info.Height > Constants.PREVIEW_MAX_PIXEL;
         }
 
         private void SaveImage()
@@ -309,9 +353,11 @@ namespace WpfImageProcessing
 
         private void RoiSelectToggle_Click(object sender, RoutedEventArgs e)
         {
-            SourceViewer.RoiSelectMode = RoiSelectToggle.IsChecked == true;
-            StatusText.Text = SourceViewer.RoiSelectMode
-                ? "ROI Select 모드 — Viewer 1에서 드래그하세요."
+            bool on = RoiSelectToggle.IsChecked == true;
+            SourceViewer.RoiSelectMode = on;
+            ResultViewer.RoiSelectMode = on;
+            StatusText.Text = on
+                ? "ROI Select 모드 — Viewer 1 또는 Viewer 2에서 드래그하세요. 연산은 ROI에만 적용됩니다."
                 : "Pan 모드 — 드래그로 이미지 이동.";
         }
 
@@ -324,12 +370,14 @@ namespace WpfImageProcessing
             Histogram.Clear();
             RoiSelectToggle.IsChecked = false;
             SourceViewer.RoiSelectMode = false;
+            ResultViewer.RoiSelectMode = false;
             StatusText.Text = "ROI가 취소되었습니다.";
         }
 
         private void OnRoiSelected(object? sender, RoiData roi)
         {
             _currentRoi = roi;
+            SourceViewer.ShowRoi(roi);
             ResultViewer.ShowRoi(roi);
             RoiInfoText.Text = roi.ToString();
             UpdateHistogramPlaceholder(roi);
@@ -578,17 +626,27 @@ namespace WpfImageProcessing
             ProcessingTimeText.Text = $"Processing Time: {result.ElapsedMs} ms ({result.OperationName})";
             if (!result.Success || result.OutputPixels == null)
             {
-                StatusText.Text = $"{result.OperationName}: {result.Message}";
+                StatusText.Text = $"{result.OperationName} 실패 ({result.ElapsedMs} ms): {result.Message}";
                 return;
             }
 
             var outBuffer = new PixelBuffer(result.OutputPixels, result.Width, result.Height);
             _workBuffer = outBuffer;
 
-            using Bitmap bmp = outBuffer.ToBitmap();
-            BitmapSource display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
+            // 원본 컬러 위에 ROI만 연산 결과 합성 (전체가 회색으로 바뀌는 문제 방지)
+            BitmapSource display;
+            if (_originalBgra != null && _currentRoi != null &&
+                outBuffer.Width == _displayWidth && outBuffer.Height == _displayHeight)
+            {
+                byte[] composed = ComposeRoiResultBgra(_originalBgra, outBuffer, _currentRoi);
+                display = BmpDisplayLoader.CreateBgraBitmap(composed, _displayWidth, _displayHeight);
+            }
+            else
+            {
+                using Bitmap bmp = outBuffer.ToBitmap();
+                display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
+            }
 
-            // 뷰포트/줌 유지 + ROI 동기 표시
             ResultViewer.SetImage(display, preserveView: true);
             if (_currentRoi != null)
             {
@@ -596,13 +654,79 @@ namespace WpfImageProcessing
                 ResultViewer.ShowRoi(_currentRoi);
             }
 
-            _resultImage?.Dispose();
-            _resultImage = new ImageData
+            StatusText.Text =
+                $"{result.OperationName} 완료 — {result.ElapsedMs} ms — {result.Message}";
+        }
+
+        private void ResetProcessing_Click(object sender, RoutedEventArgs e)
+        {
+            if (_sourceBuffer == null || _originalDisplay == null)
             {
-                SourceFilePath = _currentFilePath ?? "",
-                PixelData = (Bitmap)bmp.Clone()
-            };
-            StatusText.Text = $"{result.OperationName} 완료 (ROI만 적용) → 다음 단계로 진행하세요.";
+                MessageBox.Show("복구할 원본 이미지가 없습니다.", "Reset", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            _workBuffer = _sourceBuffer.Clone();
+            ResultViewer.SetImage(_originalDisplay, preserveView: true);
+            if (_currentRoi != null)
+            {
+                SourceViewer.ShowRoi(_currentRoi);
+                ResultViewer.ShowRoi(_currentRoi);
+            }
+
+            ProcessingTimeText.Text = "Processing Time: 0 ms (Reset)";
+            StatusText.Text = "연산 결과 Reset — Viewer 2를 원본으로 복구했습니다.";
+        }
+
+        /// <summary>원본 BGRA 위에 ROI 영역만 처리된 Gray 결과를 덮어쓴다.</summary>
+        private static byte[] ComposeRoiResultBgra(byte[] originalBgra, PixelBuffer processedGray, RoiData roi)
+        {
+            var output = (byte[])originalBgra.Clone();
+            int w = processedGray.Width;
+            int h = processedGray.Height;
+            int x0 = Math.Clamp(roi.StartX, 0, w);
+            int y0 = Math.Clamp(roi.StartY, 0, h);
+            int x1 = Math.Clamp(roi.StartX + roi.Width, 0, w);
+            int y1 = Math.Clamp(roi.StartY + roi.Height, 0, h);
+
+            for (int y = y0; y < y1; y++)
+            {
+                for (int x = x0; x < x1; x++)
+                {
+                    byte g = processedGray.Data[y * w + x];
+                    int i = (y * w + x) * 4;
+                    output[i] = g;
+                    output[i + 1] = g;
+                    output[i + 2] = g;
+                    output[i + 3] = 255;
+                }
+            }
+            return output;
+        }
+
+        private static byte[] BgraFromGrayBuffer(PixelBuffer gray)
+        {
+            var bgra = new byte[checked(gray.Width * gray.Height * 4)];
+            for (int i = 0, p = 0; i < gray.Data.Length; i++, p += 4)
+            {
+                byte g = gray.Data[i];
+                bgra[p] = g;
+                bgra[p + 1] = g;
+                bgra[p + 2] = g;
+                bgra[p + 3] = 255;
+            }
+            return bgra;
+        }
+
+        private static byte[] CopyBitmapSourceToBgra(BitmapSource source)
+        {
+            var converted = new FormatConvertedBitmap(source, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            int w = converted.PixelWidth;
+            int h = converted.PixelHeight;
+            int stride = w * 4;
+            var bgra = new byte[checked(h * stride)];
+            converted.CopyPixels(bgra, stride, 0);
+            return bgra;
         }
 
         private ProcessingParams BuildParams() => new()

@@ -14,13 +14,13 @@ namespace WpfImageProcessing.Controls
         private double _previewOffsetY;
         private ViewportChangedEventArgs? _lastViewport;
 
-        /// <summary>미리보기 이미지 영역(여백 제외)을 클릭하면 해당 위치로 이동 요청.</summary>
+        /// <summary>미리보기 이미지 영역(여백 제외) 클릭 → 해당 이미지 좌표로 이동 요청.</summary>
         public event EventHandler<NavigatorNavigateEventArgs>? NavigateRequested;
 
         public NavigatorControl()
         {
             InitializeComponent();
-            PreviewCanvas.MouseLeftButtonDown += PreviewCanvas_MouseLeftButtonDown;
+            PreviewCanvas.PreviewMouseLeftButtonDown += PreviewCanvas_PreviewMouseLeftButtonDown;
         }
 
         public void SetPreviewImage(BitmapSource? image)
@@ -43,13 +43,11 @@ namespace WpfImageProcessing.Controls
 
             UpdatePreviewLayout();
 
-            // 이미지 좌표계 → 프리뷰 좌표 (letterbox 오프셋 포함)
-            double x = _previewOffsetX + viewport.ScrollOffsetX / viewport.Scale * _previewScale;
-            double y = _previewOffsetY + viewport.ScrollOffsetY / viewport.Scale * _previewScale;
-            double w = viewport.ViewportWidth / viewport.Scale * _previewScale;
-            double h = viewport.ViewportHeight / viewport.Scale * _previewScale;
+            double x = _previewOffsetX + viewport.ScrollOffsetX / Math.Max(viewport.Scale, 1e-6) * _previewScale;
+            double y = _previewOffsetY + viewport.ScrollOffsetY / Math.Max(viewport.Scale, 1e-6) * _previewScale;
+            double w = viewport.ViewportWidth / Math.Max(viewport.Scale, 1e-6) * _previewScale;
+            double h = viewport.ViewportHeight / Math.Max(viewport.Scale, 1e-6) * _previewScale;
 
-            // 여백(letterbox) 밖으로 나가지 않도록 이미지 표시 영역으로 clamp
             double imgLeft = _previewOffsetX;
             double imgTop = _previewOffsetY;
             double imgRight = _previewOffsetX + _imageWidth * _previewScale;
@@ -73,10 +71,12 @@ namespace WpfImageProcessing.Controls
             ViewportRect.Visibility = Visibility.Visible;
         }
 
-        private void PreviewCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void PreviewCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (_imageWidth <= 0 || _imageHeight <= 0 || _previewScale <= 0)
                 return;
+
+            UpdatePreviewLayout();
 
             Point p = e.GetPosition(PreviewCanvas);
             double imgLeft = _previewOffsetX;
@@ -84,7 +84,6 @@ namespace WpfImageProcessing.Controls
             double imgRight = _previewOffsetX + _imageWidth * _previewScale;
             double imgBottom = _previewOffsetY + _imageHeight * _previewScale;
 
-            // 여백 클릭 → 무시 (이미지 영역만 처리)
             if (p.X < imgLeft || p.X > imgRight || p.Y < imgTop || p.Y > imgBottom)
             {
                 e.Handled = true;
@@ -96,17 +95,10 @@ namespace WpfImageProcessing.Controls
             imageX = Math.Clamp(imageX, 0, _imageWidth - 1);
             imageY = Math.Clamp(imageY, 0, _imageHeight - 1);
 
-            double scale = _lastViewport?.Scale ?? 1.0;
-            double viewW = _lastViewport?.ViewportWidth ?? PreviewCanvas.ActualWidth;
-            double viewH = _lastViewport?.ViewportHeight ?? PreviewCanvas.ActualHeight;
-
             NavigateRequested?.Invoke(this, new NavigatorNavigateEventArgs
             {
                 ImageX = imageX,
-                ImageY = imageY,
-                Scale = scale,
-                ViewportWidth = viewW,
-                ViewportHeight = viewH
+                ImageY = imageY
             });
             e.Handled = true;
         }
@@ -143,8 +135,5 @@ namespace WpfImageProcessing.Controls
     {
         public double ImageX { get; init; }
         public double ImageY { get; init; }
-        public double Scale { get; init; }
-        public double ViewportWidth { get; init; }
-        public double ViewportHeight { get; init; }
     }
 }

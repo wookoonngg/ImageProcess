@@ -6,12 +6,14 @@
         <Canvas x:Name="PreviewCanvas"
                 ClipToBounds="True"
                 Cursor="Hand"
-                ToolTip="이미지 영역 클릭 → 원본 Viewer 이동 (여백 클릭은 무시)"
+                Background="#1E1E1E"
+                ToolTip="이미지 클릭 → Viewer 1·2가 해당 위치로 이동합니다"
                 SizeChanged="PreviewCanvas_SizeChanged">
-            <Image x:Name="PreviewImage" Stretch="Uniform"/>
+            <Image x:Name="PreviewImage" Stretch="Fill" IsHitTestVisible="False"/>
             <Rectangle x:Name="ViewportRect"
-                       Stroke="#88C0D0" StrokeThickness="1.5"
+                       Stroke="#88C0D0" StrokeThickness="2"
                        Fill="#3388C0D0"
+                       IsHitTestVisible="False"
                        Visibility="Collapsed"/>
         </Canvas>
     </Border>

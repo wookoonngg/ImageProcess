@@ -101,14 +101,35 @@ namespace WpfImageProcessing.Controls
             ApplyViewState(viewport.Scale, viewport.ScrollOffsetX, viewport.ScrollOffsetY, raiseEvent: false);
         }
 
-        public void NavigateToImagePoint(double imageX, double imageY, double viewportWidth, double viewportHeight, double scale)
+        /// <summary>이미지 픽셀 좌표를 Viewer 중앙에 오도록 스크롤 이동.</summary>
+        public void NavigateToImagePoint(double imageX, double imageY, bool raiseEvent = true)
         {
             if (DisplayImage.Source == null)
                 return;
 
-            double targetX = imageX * scale - viewportWidth / 2.0;
-            double targetY = imageY * scale - viewportHeight / 2.0;
-            ApplyViewState(scale, Math.Max(0, targetX), Math.Max(0, targetY), raiseEvent: true);
+            ScrollHost.UpdateLayout();
+            double scale = CurrentScale;
+            double viewW = Math.Max(1, ScrollHost.ViewportWidth);
+            double viewH = Math.Max(1, ScrollHost.ViewportHeight);
+            double targetX = imageX * scale - viewW / 2.0;
+            double targetY = imageY * scale - viewH / 2.0;
+            ApplyViewState(scale, Math.Max(0, targetX), Math.Max(0, targetY), raiseEvent);
+        }
+
+        public ViewportChangedEventArgs GetViewportState()
+        {
+            double imageWidth = DisplayImage.Source is BitmapSource bs ? bs.PixelWidth : 0;
+            double imageHeight = DisplayImage.Source is BitmapSource bs2 ? bs2.PixelHeight : 0;
+            return new ViewportChangedEventArgs
+            {
+                ImageWidth = imageWidth,
+                ImageHeight = imageHeight,
+                ViewportWidth = ScrollHost.ViewportWidth,
+                ViewportHeight = ScrollHost.ViewportHeight,
+                ScrollOffsetX = ScrollHost.HorizontalOffset,
+                ScrollOffsetY = ScrollHost.VerticalOffset,
+                Scale = CurrentScale
+            };
         }
 
         private void ApplyViewState(double scale, double offsetX, double offsetY, bool raiseEvent)

@@ -169,7 +169,20 @@ namespace WpfImageProcessing.Services.Processing
             try
             {
                 var dst = src.CloneEmpty();
-                using var _ = NativeRoiHelper.Pin(parameters.Roi, out IntPtr roiPtr);
+                // 표시 좌표 ROI를 실제 버퍼에 맞춤. 완전 범위 밖이면 전체 처리로 넘어가지 않게 실패 처리.
+                RoiData? roi = parameters.Roi;
+                if (roi != null)
+                {
+                    roi = ClampRoiToBuffer(roi, src.Width, src.Height);
+                    if (roi == null)
+                        return ProcessingResult.Fail(name, "ROI가 이미지 범위를 벗어났습니다.");
+                }
+
+                // ROI가 지정됐으면 반드시 non-null 포인터로 전달
+                using var _ = NativeRoiHelper.Pin(roi, out IntPtr roiPtr);
+                if (roi != null && roiPtr == IntPtr.Zero)
+                    return ProcessingResult.Fail(name, "ROI 마샬링 실패");
+
                 int status = nativeCall(src.Data, dst.Data, roiPtr);
                 sw.Stop();
 
@@ -177,6 +190,10 @@ namespace WpfImageProcessing.Services.Processing
                 {
                     return ProcessingResult.Fail(name, IpStatus.ToMessage(status), status, sw.ElapsedMilliseconds);
                 }
+
+                // DLL이 ROI를 무시해도 ROI 밖은 원본 유지 (이중 안전장치)
+                if (roi != null)
+                    RestoreOutsideRoi(src.Data, dst.Data, src.Width, src.Height, roi);
 
                 return new ProcessingResult
                 {
@@ -187,7 +204,7 @@ namespace WpfImageProcessing.Services.Processing
                     Height = dst.Height,
                     ElapsedMs = sw.ElapsedMilliseconds,
                     NativeStatus = status,
-                    Message = "OK"
+                    Message = roi == null ? "OK (전체)" : $"OK (ROI {roi.Width}×{roi.Height} @ {roi.StartX},{roi.StartY})"
                 };
             }
             catch (DllNotFoundException ex)
@@ -199,6 +216,45 @@ namespace WpfImageProcessing.Services.Processing
             {
                 _logger.Error($"{name} failed", ex);
                 return ProcessingResult.Fail(name, ex.Message);
+            }
+        }
+
+        private static RoiData? ClampRoiToBuffer(RoiData? roi, int width, int height)
+        {
+            if (roi == null || !roi.IsValid() || width <= 0 || height <= 0)
+                return roi;
+
+            int x0 = Math.Clamp(roi.StartX, 0, width);
+            int y0 = Math.Clamp(roi.StartY, 0, height);
+            int x1 = Math.Clamp(roi.StartX + roi.Width, 0, width);
+            int y1 = Math.Clamp(roi.StartY + roi.Height, 0, height);
+            int w = x1 - x0;
+            int h = y1 - y0;
+            if (w <= 0 || h <= 0)
+                return null;
+
+            if (x0 == roi.StartX && y0 == roi.StartY && w == roi.Width && h == roi.Height)
+                return roi;
+
+            return new RoiData { StartX = x0, StartY = y0, Width = w, Height = h };
+        }
+
+        /// <summary>ROI 밖 픽셀을 원본으로 되돌려, 연산이 ROI에만 남도록 강제한다.</summary>
+        private static void RestoreOutsideRoi(byte[] src, byte[] dst, int width, int height, RoiData roi)
+        {
+            int x0 = roi.StartX;
+            int y0 = roi.StartY;
+            int x1 = roi.StartX + roi.Width;
+            int y1 = roi.StartY + roi.Height;
+
+            for (int y = 0; y < height; y++)
+            {
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    if (x < x0 || x >= x1 || y < y0 || y >= y1)
+                        dst[row + x] = src[row + x];
+                }
             }
         }
 

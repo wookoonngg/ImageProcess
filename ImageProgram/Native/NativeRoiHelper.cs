@@ -6,8 +6,8 @@ namespace WpfImageProcessing.Native
     internal static class NativeRoiHelper
     {
         /// <summary>
-        /// ROI를 네이티브에 전달. null이면 IntPtr.Zero(전체 이미지).
-        /// 호출 후 Dispose로 unpin.
+        /// ROI를 네이티브에 전달. null/invalid → IntPtr.Zero(전체 이미지).
+        /// AllocHGlobal로 복사해 GCHandle 배열 핀의 불안정성을 피한다.
         /// </summary>
         public static IDisposable Pin(RoiData? roi, out IntPtr ptr)
         {
@@ -17,11 +17,10 @@ namespace WpfImageProcessing.Native
                 return EmptyDisposable.Instance;
             }
 
-            // 단일 요소 배열로 pin → blittable struct 포인터 안정적으로 전달
-            var boxed = new[] { IpRoi.From(roi) };
-            var handle = GCHandle.Alloc(boxed, GCHandleType.Pinned);
-            ptr = handle.AddrOfPinnedObject();
-            return new GcHandleDisposable(handle);
+            var native = IpRoi.From(roi);
+            ptr = Marshal.AllocHGlobal(Marshal.SizeOf<IpRoi>());
+            Marshal.StructureToPtr(native, ptr, false);
+            return new HGlobalDisposable(ptr);
         }
 
         private sealed class EmptyDisposable : IDisposable
@@ -30,14 +29,17 @@ namespace WpfImageProcessing.Native
             public void Dispose() { }
         }
 
-        private sealed class GcHandleDisposable : IDisposable
+        private sealed class HGlobalDisposable : IDisposable
         {
-            private GCHandle _handle;
-            public GcHandleDisposable(GCHandle handle) => _handle = handle;
+            private IntPtr _ptr;
+            public HGlobalDisposable(IntPtr ptr) => _ptr = ptr;
             public void Dispose()
             {
-                if (_handle.IsAllocated)
-                    _handle.Free();
+                if (_ptr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(_ptr);
+                    _ptr = IntPtr.Zero;
+                }
             }
         }
     }

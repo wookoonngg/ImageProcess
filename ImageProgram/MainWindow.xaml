@@ -23,11 +23,11 @@
                 MinHeight="28">
             <DockPanel>
                 <TextBlock x:Name="ProcessingTimeText" DockPanel.Dock="Right"
-                           Text="Processing Time: - ms" FontWeight="SemiBold"
-                           Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
+                           Text="Processing Time: - ms" FontWeight="Bold" FontSize="13"
+                           Foreground="#1B6EF3" Margin="12,0,0,0"/>
                 <TextBlock x:Name="ImageInfoText" DockPanel.Dock="Right"
                            Text="" Foreground="{DynamicResource AppForeground}" Margin="12,0,0,0"/>
-                <TextBlock x:Name="StatusText" Text="① 원본 이미지를 열어 검사를 시작하세요."
+                <TextBlock x:Name="StatusText" Text="① 원본 이미지를 열어 검사 시작"
                            Foreground="{DynamicResource AppForeground}" TextWrapping="NoWrap"/>
             </DockPanel>
         </Border>
@@ -40,7 +40,7 @@
                 <ColumnDefinition Width="6"/>
                 <ColumnDefinition Width="*" MinWidth="200"/>
                 <ColumnDefinition Width="6"/>
-                <ColumnDefinition x:Name="RightCol" Width="260" MinWidth="180"/>
+                <ColumnDefinition x:Name="RightCol" Width="360" MinWidth="280"/>
             </Grid.ColumnDefinitions>
 
             <!-- ①~⑦ 파이프라인 -->
@@ -52,9 +52,9 @@
                         <TextBlock Text="검사 파이프라인" FontWeight="SemiBold" Margin="2,0,0,4"
                                    Foreground="{DynamicResource AppForeground}"/>
                         <TextBlock Style="{StaticResource PanelHintText}"
-                                   Text="위→아래 순서로 실행하세요. 드래그 핸들로 패널 폭을 조절할 수 있습니다."/>
+                                   Text="위→아래 순서로 실행. 드래그 핸들로 패널 폭을 조절."/>
 
-                        <GroupBox Header="① 원본 이미지 획득" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
+                        <GroupBox Header="① 원본 이미지 로드" Style="{StaticResource GroupBoxMedium}" Margin="0,0,0,8">
                             <StackPanel>
                                 <Button Content="이미지 열기 (BMP)" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="OpenMenuItem_Click"/>
@@ -66,6 +66,8 @@
                                               Click="RoiSelectToggle_Click"/>
                                 <Button Content="ROI 취소" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="RoiCancel_Click"/>
+                                <Button Content="연산 Reset (원본 복구)" Style="{StaticResource ButtonMedium}"
+                                        HorizontalAlignment="Stretch" Margin="0,2" Click="ResetProcessing_Click"/>
                             </StackPanel>
                         </GroupBox>
 
@@ -107,7 +109,7 @@
                         <GroupBox Header="⑥⑦ 패턴 비교 · 판정" Style="{StaticResource GroupBoxMedium}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource PanelHintText}"
-                                           Text="1) ROI 선택 → Template 등록&#x0a;2) 비교 방식 선택(색 강조)&#x0a;3) 비교·판정 실행"/>
+                                           Text="1) ROI 선택 → Template 등록&#x0a;2) 비교 방식 선택&#x0a;3) 비교·판정 실행"/>
                                 <Button Content="Template 등록" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="TemplateRegister_Click"/>
                                 <TextBlock x:Name="TemplateStatusText" Text="Template: 미등록"
@@ -151,7 +153,7 @@
             <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
                           Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
 
-            <GroupBox Grid.Column="2" Header="원본 Viewer (확대·이동·ROI)"
+            <GroupBox Grid.Column="2" Header="원본 Viewer"
                       Style="{StaticResource GroupBoxMedium}" Padding="4">
                 <controls:ImageViewerControl x:Name="SourceViewer"/>
             </GroupBox>
@@ -167,30 +169,40 @@
             <GridSplitter Grid.Column="5" Width="6" HorizontalAlignment="Stretch"
                           Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
 
-            <!-- 우측: Navigator → Histogram → ROI (세로 분할 가능) -->
+            <!-- 우측: Navigator(정사각 박스) → Histogram(가로로 긴 그래프) → ROI -->
             <Grid Grid.Column="6">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="200" MinHeight="120"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="6"/>
-                    <RowDefinition Height="*" MinHeight="140"/>
+                    <RowDefinition Height="140" MinHeight="110"/>
                     <RowDefinition Height="6"/>
                     <RowDefinition Height="Auto" MinHeight="70"/>
                 </Grid.RowDefinitions>
 
-                <GroupBox Header="Navigator — 전체 위치 미리보기" Style="{StaticResource GroupBoxMedium}">
+                <GroupBox Header="Navigator — 클릭 시 Viewer 이동" Style="{StaticResource GroupBoxMedium}">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource PanelHintText}"
-                                   Text="파란 박스 = 원본 Viewer가 보고 있는 영역.&#x0a;이미지(여백 제외)를 클릭하면 Viewer가 그 위치로 이동합니다."/>
-                        <controls:NavigatorControl x:Name="Navigator"/>
+                                   Text="파란 박스 = 현재 Viewer 위치.&#x0a;미리보기 클릭 → Viewer 1·2 이동."/>
+                        <!-- 정사각형 미리보기 -->
+                        <Border Width="240" Height="240"
+                                HorizontalAlignment="Center"
+                                BorderBrush="#4C566A" BorderThickness="1"
+                                Background="#1E1E1E">
+                            <controls:NavigatorControl x:Name="Navigator"/>
+                        </Border>
                     </DockPanel>
                 </GroupBox>
 
                 <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
                               Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
 
-                <GroupBox Grid.Row="2" Header="Histogram (가로 · Gray 0→255)"
+                <!-- 가로로 긴 히스토그램 그래프 영역 -->
+                <GroupBox Grid.Row="2" Header="Histogram (가로로 긴 그래프 · Gray 0→255)"
                           Style="{StaticResource GroupBoxMedium}">
-                    <controls:HistogramControl x:Name="Histogram"/>
+                    <controls:HistogramControl x:Name="Histogram"
+                                               Height="110"
+                                               HorizontalAlignment="Stretch"
+                                               VerticalAlignment="Stretch"/>
                 </GroupBox>
 
                 <GridSplitter Grid.Row="3" Height="6" HorizontalAlignment="Stretch"
@@ -199,7 +211,7 @@
                 <GroupBox Grid.Row="4" Header="ROI 정보" Style="{StaticResource GroupBoxMedium}">
                     <StackPanel Margin="6">
                         <TextBlock Style="{StaticResource PanelHintText}"
-                                   Text="원본 Viewer에서 ROI를 드래그하면 좌표와 위 Histogram이 갱신됩니다."/>
+                                   Text="Viewer 1 또는 2에서 ROI 드래그 → 연산은 ROI만 적용."/>
                         <TextBlock x:Name="RoiInfoText" Text="ROI: -"
                                    Foreground="{DynamicResource AppForeground}" FontWeight="SemiBold"/>
                     </StackPanel>

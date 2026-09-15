@@ -1,16 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "ImageProcessingApi.h"
 #include <algorithm>
 #include <cstring>
 
-
-
-
-// C# PixelBuffer 계약: stride == width (패딩 없음)
+// C# PixelBuffer contract: stride == width (no padding)
 inline int IpStride(int width) { return width; }
-
-
 
 inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, int height)
 {
@@ -21,8 +16,10 @@ inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, 
     return true;
 }
 
-inline void IpResolveRoi(const IpRoi* roi, int width, int height, int& startX, int& startY, int& endX, int& endY)
+inline void IpResolveRoi(const IpRoi* roi, int width, int height,
+                         int& startX, int& startY, int& endX, int& endY)
 {
+    // null ROI => full image
     startX = 0;
     startY = 0;
     endX = width;
@@ -36,16 +33,14 @@ inline void IpResolveRoi(const IpRoi* roi, int width, int height, int& startX, i
     endX = std::min(width, roi->X + roi->Width);
     endY = std::min(height, roi->Y + roi->Height);
 
+    // Invalid ROI: empty range (do NOT expand to full image)
     if (startX >= endX || startY >= endY)
     {
         startX = 0;
         startY = 0;
-        endX = width;
-        endY = height;
+        endX = 0;
+        endY = 0;
     }
-
-
-
 }
 
 inline void IpCopyImage(const unsigned char* src, unsigned char* dst, int width, int height)
@@ -65,6 +60,6 @@ inline int IpClampKernel(int kernelSize)
     if (kernelSize < 1)
         return 1;
     if ((kernelSize & 1) == 0)
-        ++kernelSize; // 짝수면 홀수로
+        ++kernelSize;
     return kernelSize;
 }
