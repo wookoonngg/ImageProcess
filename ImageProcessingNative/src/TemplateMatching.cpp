@@ -4,40 +4,51 @@
 #include <cmath>
 #include <cfloat>
 
-static double ScoreDiff(
-    const unsigned char* image, int imageWidth,
-    const unsigned char* templ, int templWidth, int templHeight,
-    int ox, int oy)
+
+
+// template과 원본 차이 계산 
+
+static double ScoreDiff(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
+
+
     double sum = 0.0; 
 
 
     const double area = static_cast<double>(templWidth) * templHeight;
+
     for (int ty = 0; ty < templHeight; ++ty)
     {
         for (int tx = 0; tx < templWidth; ++tx)
         {
-            const int diff = static_cast<int>(image[(oy + ty) * imageWidth + (ox + tx)]) -
-                             static_cast<int>(templ[ty * templWidth + tx]);
+            const int diff = static_cast<int>(image[(oy + ty) * imageWidth + (ox + tx)]) - static_cast<int>(templ[ty * templWidth + tx]); // 걍 빼고
+
+            // 뺀건 제곱 - 음수 없애기 혹시나 
+
             sum += diff * diff;
+
+
         }
     }
     // 낮을수록 유사 → 점수는 1 / (1 + meanSSE)
     return 1.0 / (1.0 + sum / area);
 }
 
-static double ScoreCorr(
-    const unsigned char* image, int imageWidth,
-    const unsigned char* templ, int templWidth, int templHeight,
-    int ox, int oy)
+static double ScoreCorr( const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
+
+
     double sumIT = 0.0;
     double sumI2 = 0.0;
     double sumT2 = 0.0;
+
+
     for (int ty = 0; ty < templHeight; ++ty)
     {
         for (int tx = 0; tx < templWidth; ++tx)
         {
+
+
             const double iv = image[(oy + ty) * imageWidth + (ox + tx)];
             const double tv = templ[ty * templWidth + tx];
             sumIT += iv * tv;
@@ -87,46 +98,60 @@ static double ScoreCoeff(
     return num / denom;
 }
 
-int IpTemplateMatch(
-    const unsigned char* image, int imageWidth, int imageHeight,
-    const unsigned char* templ, int templWidth, int templHeight,
-    int method,
-    IpMatchResult* outResult,
-    const IpRoi* searchRoi)
+int IpTemplateMatch(const unsigned char* image, int imageWidth, int imageHeight, const unsigned char* templ, int templWidth, int templHeight,int method, IpMatchResult* outResult,const IpRoi* searchRoi)
 {
     if (image == nullptr || templ == nullptr || outResult == nullptr)
         return IP_ERR_NULL_PTR;
     if (imageWidth <= 0 || imageHeight <= 0 || templWidth <= 0 || templHeight <= 0)
         return IP_ERR_INVALID_SIZE;
     if (templWidth > imageWidth || templHeight > imageHeight)
-        return IP_ERR_INVALID_PARAM;
     if (method < 0 || method > 2)
         return IP_ERR_INVALID_PARAM;
+        return IP_ERR_INVALID_PARAM;
+
+
+
 
     int startX = 0;
     int startY = 0;
+
+    // 끝지점 걍 끝으로 하면 템플릿 넘어감 그만큼 빼고 끝점 지정
+
     int endX = imageWidth - templWidth + 1;
     int endY = imageHeight - templHeight + 1;
 
+
+    //roi가 있을 때 
     if (searchRoi != nullptr)
     {
-        startX = std::max(0, searchRoi->X);
+
+        startX = std::max(0, searchRoi->X); // roi 영역 내에서만 탐색
         startY = std::max(0, searchRoi->Y);
         endX = std::min(endX, searchRoi->X + searchRoi->Width - templWidth + 1);
         endY = std::min(endY, searchRoi->Y + searchRoi->Height - templHeight + 1);
     }
 
+
+
     if (startX >= endX || startY >= endY)
         return IP_ERR_INVALID_PARAM;
 
+
+    //가장 좋은 최적 값 저장
     double bestScore = -DBL_MAX;
+
+    // X,Y엔 최적 위치 저장 
     int bestX = startX;
     int bestY = startY;
+
+
+    // 슬라이딩 템플릿을 움직이면서
 
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
         {
+            //매 위치마다 유사도 계산 
             double score = 0.0;
             switch (method)
             {

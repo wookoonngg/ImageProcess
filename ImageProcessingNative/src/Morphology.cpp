@@ -21,7 +21,7 @@ int IpDilation(const unsigned char* src, unsigned char* dst, int width, int heig
     IpCopyImage(src, dst, width, height); // 원본 복사
 
 
-
+    //x,y 이미지 전체 순회 하면서 max 값으로 ipSample 통과시켜서 갱신 
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
@@ -75,8 +75,6 @@ int IpErosion(const unsigned char* src, unsigned char* dst, int width, int heigh
 
                     minVal = std::min(minVal, IpSample(src, x + kx, y + ky, width, height));
                     // min 값으로 교체
-
-
             }
             dst[y * width + x] = minVal;
         }

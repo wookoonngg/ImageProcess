@@ -108,24 +108,24 @@
                         <!-- ⑥+⑦ 통합: Template → 방식 선택 → 비교·판정 -->
                         <GroupBox Header="⑥⑦ 패턴 비교 · 판정" Style="{StaticResource GroupBoxMedium}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource PanelHintText}"
-                                           Text="1) ROI 선택 → Template 등록&#x0a;2) 비교 방식 선택&#x0a;3) 비교·판정 실행"/>
-                                <Button Content="Template 등록" Style="{StaticResource ButtonMedium}"
+                                <TextBlock Style="{StaticResource PanelHintText}" TextWrapping="Wrap"
+                                           Text="올바른 검사 순서&#x0a;1) 골든(기준) 이미지 열기 → ROI → Template 등록&#x0a;2) 검사 대상 이미지를 새로 열기 (Template은 유지됨)&#x0a;3) 방식 선택 → 비교·판정 실행&#x0a;&#x0a;같은 이미지에서 등록·비교하면 그 자리에서 거의 만점이 나옵니다. Template은 다른 wafer/shot에 슬라이딩해야 검사입니다."/>
+                                <Button Content="Template 등록 (골든 ROI)" Style="{StaticResource ButtonMedium}"
                                         HorizontalAlignment="Stretch" Margin="0,2" Click="TemplateRegister_Click"/>
                                 <TextBlock x:Name="TemplateStatusText" Text="Template: 미등록"
-                                           Margin="0,4,0,4" FontSize="11"
+                                           Margin="0,4,0,4" FontSize="11" TextWrapping="Wrap"
                                            Foreground="{DynamicResource AppForeground}"/>
 
                                 <StackPanel x:Name="MatchPanel" Visibility="Collapsed" Margin="0,4,0,0">
-                                    <TextBlock Text="비교 방식" FontWeight="SemiBold" Margin="0,0,0,2"
+                                    <TextBlock Text="비교 방식 (유사도 점수)" FontWeight="SemiBold" Margin="0,0,0,2"
                                                Foreground="{DynamicResource AppForeground}"/>
-                                    <ToggleButton x:Name="MethodDiffBtn" Content="DIFF (차이)"
+                                    <ToggleButton x:Name="MethodDiffBtn" Content="DIFF — 픽셀 차이(낮을수록 유사→점수화)"
                                                   Style="{StaticResource MethodSelectButton}"
                                                   Click="MethodSelect_Click" Tag="Diff"/>
-                                    <ToggleButton x:Name="MethodCorrBtn" Content="CORR (상관)"
+                                    <ToggleButton x:Name="MethodCorrBtn" Content="CORR — 상관(높을수록 유사)"
                                                   Style="{StaticResource MethodSelectButton}"
                                                   Click="MethodSelect_Click" Tag="Corr"/>
-                                    <ToggleButton x:Name="MethodCoeffBtn" Content="COEFF (정규화)"
+                                    <ToggleButton x:Name="MethodCoeffBtn" Content="COEFF — 정규화 상관(권장, 0~1)"
                                                   Style="{StaticResource MethodSelectButton}"
                                                   Click="MethodSelect_Click" Tag="Coeff"/>
 
@@ -169,26 +169,28 @@
             <GridSplitter Grid.Column="5" Width="6" HorizontalAlignment="Stretch"
                           Background="#4C566A" ResizeBehavior="PreviousAndNext" ShowsPreview="True"/>
 
-            <!-- 우측: Navigator(정사각 박스) → Histogram(가로로 긴 그래프) → ROI -->
+            <!-- 우측: Navigator → Histogram → ROI → 분석 로그 (스플리터로 크기 조절) -->
             <Grid Grid.Column="6">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="1.2*" MinHeight="120"/>
                     <RowDefinition Height="6"/>
-                    <RowDefinition Height="140" MinHeight="110"/>
+                    <RowDefinition Height="0.9*" MinHeight="90"/>
                     <RowDefinition Height="6"/>
-                    <RowDefinition Height="Auto" MinHeight="70"/>
+                    <RowDefinition Height="Auto" MinHeight="56"/>
+                    <RowDefinition Height="6"/>
+                    <RowDefinition Height="1.1*" MinHeight="100"/>
                 </Grid.RowDefinitions>
 
                 <GroupBox Header="Navigator — 클릭 시 Viewer 이동" Style="{StaticResource GroupBoxMedium}">
-                    <DockPanel>
+                    <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource PanelHintText}"
-                                   Text="파란 박스 = 현재 Viewer 위치.&#x0a;미리보기 클릭 → Viewer 1·2 이동."/>
-                        <!-- 정사각형 미리보기 -->
-                        <Border Width="240" Height="240"
-                                HorizontalAlignment="Center"
+                                   Text="패널을 끌면 미리보기도 같이 커집니다.&#x0a;파란 박스 = 현재 Viewer 위치 · 클릭 → Viewer 이동"/>
+                        <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                 BorderBrush="#4C566A" BorderThickness="1"
-                                Background="#1E1E1E">
-                            <controls:NavigatorControl x:Name="Navigator"/>
+                                Background="#1E1E1E" MinHeight="80" MinWidth="80">
+                            <controls:NavigatorControl x:Name="Navigator"
+                                                       HorizontalAlignment="Stretch"
+                                                       VerticalAlignment="Stretch"/>
                         </Border>
                     </DockPanel>
                 </GroupBox>
@@ -196,11 +198,9 @@
                 <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch"
                               Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
 
-                <!-- 가로로 긴 히스토그램 그래프 영역 -->
-                <GroupBox Grid.Row="2" Header="Histogram (가로로 긴 그래프 · Gray 0→255)"
+                <GroupBox Grid.Row="2" Header="Histogram (Gray 0→255)"
                           Style="{StaticResource GroupBoxMedium}">
                     <controls:HistogramControl x:Name="Histogram"
-                                               Height="110"
                                                HorizontalAlignment="Stretch"
                                                VerticalAlignment="Stretch"/>
                 </GroupBox>
@@ -211,10 +211,32 @@
                 <GroupBox Grid.Row="4" Header="ROI 정보" Style="{StaticResource GroupBoxMedium}">
                     <StackPanel Margin="6">
                         <TextBlock Style="{StaticResource PanelHintText}"
-                                   Text="Viewer 1 또는 2에서 ROI 드래그 → 연산은 ROI만 적용."/>
+                                   Text="Viewer에서 ROI 드래그 → 연산은 ROI만 적용."/>
                         <TextBlock x:Name="RoiInfoText" Text="ROI: -"
                                    Foreground="{DynamicResource AppForeground}" FontWeight="SemiBold"/>
                     </StackPanel>
+                </GroupBox>
+
+                <GridSplitter Grid.Row="5" Height="6" HorizontalAlignment="Stretch"
+                              Background="#4C566A" ResizeDirection="Rows" ShowsPreview="True"/>
+
+                <GroupBox Grid.Row="6" Header="분석 로그" Style="{StaticResource GroupBoxMedium}">
+                    <DockPanel Margin="4" LastChildFill="True">
+                        <Button DockPanel.Dock="Top" Content="로그 지우기" Padding="6,2" Margin="0,0,0,4"
+                                HorizontalAlignment="Right" Click="ClearAnalysisLog_Click"/>
+                        <TextBox x:Name="AnalysisLogText"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Disabled"
+                                 FontFamily="Consolas"
+                                 FontSize="11"
+                                 Background="#1E1E1E"
+                                 Foreground="#D8DEE9"
+                                 BorderBrush="#4C566A"
+                                 Text="이미지 열기 · ROI · 필터 · 패턴 비교 결과가 여기에 쌓입니다."/>
+                    </DockPanel>
                 </GroupBox>
             </Grid>
         </Grid>

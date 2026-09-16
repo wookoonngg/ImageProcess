@@ -1,12 +1,18 @@
 <UserControl x:Class="WpfImageProcessing.Controls.NavigatorControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="#2E3440">
-    <Border BorderBrush="#4C566A" BorderThickness="1" Background="#1E1E1E">
+             Background="#2E3440"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch"
+             MinWidth="40" MinHeight="40">
+    <Border BorderBrush="#4C566A" BorderThickness="1" Background="#1E1E1E"
+            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <Canvas x:Name="PreviewCanvas"
                 ClipToBounds="True"
                 Cursor="Hand"
                 Background="#1E1E1E"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
                 ToolTip="이미지 클릭 → Viewer 1·2가 해당 위치로 이동합니다"
                 SizeChanged="PreviewCanvas_SizeChanged">
             <Image x:Name="PreviewImage" Stretch="Fill" IsHitTestVisible="False"/>

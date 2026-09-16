@@ -73,6 +73,7 @@ namespace WpfImageProcessing
             }
 
             StatusText.Text = $"Navigator 이동 → 이미지 좌표 ({e.ImageX:F0}, {e.ImageY:F0})";
+            AppendAnalysisLog($"Navigator 이동 → ({e.ImageX:F0}, {e.ImageY:F0})");
         }
 
         private void OnSourceViewportChanged(object? sender, ViewportChangedEventArgs e)
@@ -150,7 +151,7 @@ namespace WpfImageProcessing
                 _workBuffer = null;
                 _originalBgra = null;
                 _originalDisplay = null;
-                _templateData = null;
+                // Template은 골든에서 따 두고 검사 이미지로 넘기기 위해 유지
                 _lastMatchScore = null;
                 _currentRoi = null;
 
@@ -242,7 +243,8 @@ namespace WpfImageProcessing
                 Navigator.SetPreviewImage(displayImage);
                 Histogram.Clear();
                 RoiInfoText.Text = "ROI: -";
-                ResetMatchUi();
+                ClearMatchResultUi();
+                RefreshTemplateStatusAfterImageOpen();
 
                 StatusText.Text = _isPreviewMode
                     ? $"Preview 모드 ({displayImage.PixelWidth}×{displayImage.PixelHeight} 처리 버퍼) — 원본: {headerInfo.Width}×{headerInfo.Height}"
@@ -253,6 +255,14 @@ namespace WpfImageProcessing
                     $"{FormatBytes(headerInfo.FileSize)} | {Path.GetFileName(filePath)}";
                 if (_isPreviewMode)
                     ImageInfoText.Text += " | Preview 연산";
+
+                ClearAnalysisLog();
+                AppendAnalysisLog(
+                    $"이미지 열기: {Path.GetFileName(filePath)} | 원본 {headerInfo.Width}×{headerInfo.Height} " +
+                    $"({headerInfo.BitDepth}bit, {FormatBytes(headerInfo.FileSize)})" +
+                    (_isPreviewMode
+                        ? $" | Preview 버퍼 {displayImage.PixelWidth}×{displayImage.PixelHeight}"
+                        : ""));
             }
             catch (Exception ex)
             {
@@ -372,6 +382,7 @@ namespace WpfImageProcessing
             SourceViewer.RoiSelectMode = false;
             ResultViewer.RoiSelectMode = false;
             StatusText.Text = "ROI가 취소되었습니다.";
+            AppendAnalysisLog("ROI 취소");
         }
 
         private void OnRoiSelected(object? sender, RoiData roi)
@@ -382,6 +393,7 @@ namespace WpfImageProcessing
             RoiInfoText.Text = roi.ToString();
             UpdateHistogramPlaceholder(roi);
             StatusText.Text = $"ROI 선택됨: {roi} — 이후 연산은 이 영역에만 적용됩니다.";
+            AppendAnalysisLog($"ROI 선택: ({roi.StartX},{roi.StartY}) {roi.Width}×{roi.Height}");
         }
 
         private void TemplateRegister_Click(object sender, RoutedEventArgs e)
@@ -409,13 +421,31 @@ namespace WpfImageProcessing
                     TemplateStatusText.Text = "Template: 등록 실패";
                     MatchPanel.Visibility = Visibility.Collapsed;
                     StatusText.Text = "Template 등록 실패";
+                    AppendAnalysisLog("Template 등록 실패");
                     return;
                 }
 
-                TemplateStatusText.Text = $"Template: {_templateData.Width}×{_templateData.Height} 등록됨";
+                // 골든 파일 경로 기록 (이후 다른 이미지에서 매칭해야 검사)
+                _templateData = new TemplateData
+                {
+                    SourceRoi = _templateData.SourceRoi,
+                    Pixels = _templateData.Pixels,
+                    Width = _templateData.Width,
+                    Height = _templateData.Height,
+                    SourceFilePath = _currentFilePath,
+                    RegisteredAt = _templateData.RegisteredAt
+                };
+
+                string goldenName = Path.GetFileName(_currentFilePath) ?? "(unknown)";
+                TemplateStatusText.Text =
+                    $"Template: {_templateData.Width}×{_templateData.Height} 등록됨\n골든: {goldenName}\n→ 검사 대상 이미지를 새로 연 뒤 비교하세요";
                 MatchPanel.Visibility = Visibility.Visible;
                 SelectMethod(MatchingMethod.Coeff);
-                StatusText.Text = "Template 등록 완료 — 비교 방식을 선택한 뒤 [비교 · 판정 실행]";
+                StatusText.Text =
+                    "Template 등록 완료 — 이제 검사할 다른 이미지를 연 뒤 [비교 · 판정 실행]";
+                AppendAnalysisLog(
+                    $"Template 등록: {_templateData.Width}×{_templateData.Height} " +
+                    $"(골든 ROI {_templateData.SourceRoi}, 파일 {goldenName}) — 다른 이미지에 슬라이딩 비교용");
             });
         }
 
@@ -440,7 +470,8 @@ namespace WpfImageProcessing
                 SourceRoi = new RoiData { StartX = x0, StartY = y0, Width = w, Height = h },
                 Pixels = pixels,
                 Width = w,
-                Height = h
+                Height = h,
+                SourceFilePath = null
             };
         }
 
@@ -518,7 +549,14 @@ namespace WpfImageProcessing
             MethodDiffBtn.IsChecked = method == MatchingMethod.Diff;
             MethodCorrBtn.IsChecked = method == MatchingMethod.Corr;
             MethodCoeffBtn.IsChecked = method == MatchingMethod.Coeff;
-            StatusText.Text = $"비교 방식: {method} 선택됨 — [비교 · 판정 실행]을 누르세요.";
+            string hint = method switch
+            {
+                MatchingMethod.Diff => "DIFF: 픽셀 차이가 작을수록 높은 Score",
+                MatchingMethod.Corr => "CORR: 상관값이 클수록 유사",
+                _ => "COEFF: 밝기 차이에 덜 민감한 정규화 상관(0~1 권장)"
+            };
+            StatusText.Text = $"비교 방식: {method} — {hint}";
+            AppendAnalysisLog($"비교 방식 선택: {method} ({hint})");
         }
 
         private void CompareAndJudge_Click(object sender, RoutedEventArgs e)
@@ -539,6 +577,23 @@ namespace WpfImageProcessing
                 return;
             }
 
+            bool sameAsGolden =
+                !string.IsNullOrEmpty(_templateData.SourceFilePath) &&
+                string.Equals(_templateData.SourceFilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase);
+
+            if (sameAsGolden)
+            {
+                var answer = MessageBox.Show(
+                    "지금 열린 이미지가 Template을 딴 골든과 같습니다.\n" +
+                    "같은 자리에서 거의 최고 Score가 나옵니다 (자기 자신 비교).\n\n" +
+                    "검사는 골든에서 Template을 등록한 뒤,\n다른 검사 대상 이미지를 열고 비교해야 합니다.\n\n그래도 실행할까요?",
+                    "자기 자신 비교",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.Yes)
+                    return;
+            }
+
             var sw = Stopwatch.StartNew();
             MatchingResult result = _processing.RunMatching(_selectedMethod, buffer, _templateData, null);
             sw.Stop();
@@ -552,6 +607,8 @@ namespace WpfImageProcessing
                 JudgeResultText.Text = $"판정: 비교 실패 — {result.Message}";
                 JudgeResultText.Foreground = System.Windows.Media.Brushes.Salmon;
                 StatusText.Text = JudgeResultText.Text;
+                AppendAnalysisLog(
+                    $"비교 실패 [{_selectedMethod}] {sw.ElapsedMilliseconds}ms — {result.Message}");
                 return;
             }
 
@@ -568,6 +625,12 @@ namespace WpfImageProcessing
                 : System.Windows.Media.Brushes.Salmon;
             StatusText.Text = JudgeResultText.Text;
 
+            AppendAnalysisLog(
+                $"패턴 비교 [{_selectedMethod}] Template {_templateData.Width}×{_templateData.Height} " +
+                $"vs 작업 이미지 {_workBuffer?.Width}×{_workBuffer?.Height} | " +
+                $"최고점 ({result.BestX},{result.BestY}) Score={result.Score:F4} | " +
+                $"기준≥{threshold:F2} → {(pass ? "PASS(정상)" : "FAIL(불량)")} | {sw.ElapsedMilliseconds}ms");
+
             // 매칭 위치를 결과 Viewer ROI로 표시
             ResultViewer.ShowRoi(new RoiData
             {
@@ -581,16 +644,43 @@ namespace WpfImageProcessing
         private void ResetMatchUi()
         {
             _templateData = null;
-            _lastMatchScore = null;
+            ClearMatchResultUi();
             TemplateStatusText.Text = "Template: 미등록";
             MatchPanel.Visibility = Visibility.Collapsed;
+            MethodDiffBtn.IsChecked = false;
+            MethodCorrBtn.IsChecked = false;
+            MethodCoeffBtn.IsChecked = false;
+        }
+
+        /// <summary>새 이미지 로드 시 Score/판정만 초기화. Template은 유지.</summary>
+        private void ClearMatchResultUi()
+        {
+            _lastMatchScore = null;
             MatchScoreText.Text = "Score: -";
             MatchPositionText.Text = "Position: -";
             JudgeResultText.Text = "판정: -";
             JudgeResultText.Foreground = System.Windows.Media.Brushes.White;
-            MethodDiffBtn.IsChecked = false;
-            MethodCorrBtn.IsChecked = false;
-            MethodCoeffBtn.IsChecked = false;
+        }
+
+        private void RefreshTemplateStatusAfterImageOpen()
+        {
+            if (_templateData == null)
+            {
+                TemplateStatusText.Text = "Template: 미등록";
+                MatchPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            string goldenName = Path.GetFileName(_templateData.SourceFilePath) ?? "(unknown)";
+            string currentName = Path.GetFileName(_currentFilePath) ?? "(unknown)";
+            bool same = string.Equals(_templateData.SourceFilePath, _currentFilePath, StringComparison.OrdinalIgnoreCase);
+
+            TemplateStatusText.Text = same
+                ? $"Template: {_templateData.Width}×{_templateData.Height} 유지 중\n골든=현재 파일 ({goldenName})\n→ 검사 대상 이미지를 새로 여세요"
+                : $"Template: {_templateData.Width}×{_templateData.Height} 유지 중\n골든: {goldenName}\n검사 대상: {currentName}";
+            MatchPanel.Visibility = Visibility.Visible;
+            if (!same)
+                StatusText.Text = $"검사 이미지 로드됨 — Template({goldenName})로 비교·판정 가능";
         }
 
         private void RunMorphology(MorphologyOperation op)
@@ -627,6 +717,7 @@ namespace WpfImageProcessing
             if (!result.Success || result.OutputPixels == null)
             {
                 StatusText.Text = $"{result.OperationName} 실패 ({result.ElapsedMs} ms): {result.Message}";
+                AppendAnalysisLog($"{result.OperationName} 실패 ({result.ElapsedMs}ms): {result.Message}");
                 return;
             }
 
@@ -656,6 +747,8 @@ namespace WpfImageProcessing
 
             StatusText.Text =
                 $"{result.OperationName} 완료 — {result.ElapsedMs} ms — {result.Message}";
+            AppendAnalysisLog(
+                $"{result.OperationName} 완료 ({result.ElapsedMs}ms) — {result.Message}");
         }
 
         private void ResetProcessing_Click(object sender, RoutedEventArgs e)
@@ -676,6 +769,26 @@ namespace WpfImageProcessing
 
             ProcessingTimeText.Text = "Processing Time: 0 ms (Reset)";
             StatusText.Text = "연산 결과 Reset — Viewer 2를 원본으로 복구했습니다.";
+            AppendAnalysisLog("연산 Reset — Viewer 2 / 작업 버퍼를 원본으로 복구");
+        }
+
+        private void ClearAnalysisLog_Click(object sender, RoutedEventArgs e) => ClearAnalysisLog();
+
+        private void ClearAnalysisLog()
+        {
+            AnalysisLogText.Text = "";
+        }
+
+        private void AppendAnalysisLog(string message)
+        {
+            string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            if (string.IsNullOrWhiteSpace(AnalysisLogText.Text))
+                AnalysisLogText.Text = line;
+            else
+                AnalysisLogText.AppendText(Environment.NewLine + line);
+
+            AnalysisLogText.CaretIndex = AnalysisLogText.Text.Length;
+            AnalysisLogText.ScrollToEnd();
         }
 
         /// <summary>원본 BGRA 위에 ROI 영역만 처리된 Gray 결과를 덮어쓴다.</summary>

@@ -17,22 +17,24 @@ int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int hei
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
     IpCopyImage(src, dst, width, height);
 
-    // 3x3 Gaussian-ish mean (노이즈 제거용 box blur)
+    // 이게 평균 계산용 상수
     const float invArea = 1.0f / static_cast<float>(kernelSize * kernelSize);
 
+    //전체 픽셀 순회하면서
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
         {
-            float sum = 0.0f;
+            float sum = 0.0f; // 현재 커널 영역 픽셀의 합
             for (int ky = -radius; ky <= radius; ++ky)
             {
                 for (int kx = -radius; kx <= radius; ++kx)
                     sum += IpSample(src, x + kx, y + ky, width, height);
+                //주변 픽셀 합산 
             }
 
 
-
+            // 평균 계산 sum 곱하기 invArea
             dst[y * width + x] = static_cast<unsigned char>(std::clamp(sum * invArea + 0.5f, 0.0f, 255.0f));
         }
     }

@@ -121,14 +121,11 @@ int IpLaplacian(const unsigned char* src, unsigned char* dst, int width, int hei
             for (int ky = -1; ky <= 1; ++ky)
             {
                 for (int kx = -1; kx <= 1; ++kx)
-
-
                     sum += static_cast<int>(IpSample(src, x + kx, y + ky, width, height)) * k[ky + 1][kx + 1];
                 // 커널 convolution 연산 수행 하고 IpSample 메소드로 값 갱신
-
-
             }
-            dst[y * width + x] = static_cast<unsigned char>(std::clamp(std::abs(sum), 0, 255)); // 방향 상관 없이 알고 싶으니까 abs
+            dst[y * width + x] = static_cast<unsigned char>(std::clamp(std::abs(sum), 0, 255));
+            // 방향 상관 없이 알고 싶으니까 abs
         }
     }
     return IP_OK;

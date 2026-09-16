@@ -46,7 +46,6 @@ namespace WpfImageProcessing.Models
 
     public sealed class TemplateData
     {
-
         public required RoiData SourceRoi { get; init; }
 
         public required byte[] Pixels { get; init; }
@@ -55,9 +54,10 @@ namespace WpfImageProcessing.Models
 
         public int Height { get; init; }
 
+        /// <summary>템플릿을 딴 골든(기준) 이미지 경로. 검사 대상과 달라야 의미가 있음.</summary>
+        public string? SourceFilePath { get; init; }
+
         public DateTime RegisteredAt { get; init; } = DateTime.Now;
-
-
     }
 
     public sealed class MatchingResult
