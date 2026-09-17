@@ -3,15 +3,17 @@ using System.Diagnostics;
 
 namespace WpfImageProcessing.Models
 {
-    /// <summary>
+
     /// BMP 파일의 헤더 정보를 나타내는 데이터 클래스
     /// 
-    /// 설계 의도:
+    /// 설계 
     /// - BMP 파일 형식의 핵심 정보만 추출
     /// - DTO (Data Transfer Object) 패턴 적용
     /// - 검증 로직은 최소화 (Service에서 담당)
-    /// </summary>
     /// 
+
+
+
 
     public class BitmapFileInfo
     {
