@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cstring>
 
-// C# PixelBuffer contract: stride == width (no padding)
+// C# 픽셀 버퍼 패딩 없이 == width -> 일대일 매칭 되게
 inline int IpStride(int width) { return width; }
 
 inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, int height)
@@ -16,10 +16,9 @@ inline bool IpValidate(const unsigned char* src, unsigned char* dst, int width, 
     return true;
 }
 
-inline void IpResolveRoi(const IpRoi* roi, int width, int height,
-                         int& startX, int& startY, int& endX, int& endY)
+inline void IpResolveRoi(const IpRoi* roi, int width, int height, int& startX, int& startY, int& endX, int& endY)
 {
-    // null ROI => full image
+    // roi 널값이면 전체이미ㅣ지로
     startX = 0;
     startY = 0;
     endX = width;
@@ -32,6 +31,8 @@ inline void IpResolveRoi(const IpRoi* roi, int width, int height,
     startY = std::max(0, roi->Y);
     endX = std::min(width, roi->X + roi->Width);
     endY = std::min(height, roi->Y + roi->Height);
+
+
 
     // Invalid ROI: empty range (do NOT expand to full image)
     if (startX >= endX || startY >= endY)

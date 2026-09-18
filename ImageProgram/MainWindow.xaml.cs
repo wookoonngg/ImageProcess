@@ -6,7 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using WpfImageProcessing.Controls;
-using WpfImageProcessing.Models;
+using WpfImageProcessing.Models;  
 using WpfImageProcessing.Native;
 using WpfImageProcessing.Services;
 using WpfImageProcessing.Services.Processing;
@@ -87,7 +87,7 @@ namespace WpfImageProcessing
             PanelMatching.Visibility = Visibility.Visible;
             TabPreprocessBtn.IsChecked = false;
             TabMatchingBtn.IsChecked = true;
-            StatusText.Text = "템플릿 매칭 탭 — Step1 Template → Step2 검색범위 → Step3 실행";
+       
         }
 
         private void OnNavigatorNavigate(object? sender, NavigatorNavigateEventArgs e)

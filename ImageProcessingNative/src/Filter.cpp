@@ -166,7 +166,7 @@ int IpSobel(const unsigned char* src, unsigned char* dst, int width, int height,
             int sx = 0;
             int sy = 0;
 
-            // 커널 각각 수행 이중의 이중이아니네?
+           
 
             for (int ky = -1; ky <= 1; ++ky)
             {
