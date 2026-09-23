@@ -63,25 +63,22 @@ int IpGaussian(const unsigned char* src, unsigned char* dst, int width, int heig
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
     IpCopyImage(src, dst, width, height); // dst 복제
 
-
-    //전체 이미지 순회
+#pragma omp parallel for schedule(static) if((endY - startY) * (endX - startX) > 2048)
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
         {
-            float sum = 0.0f; // 마찬가지로 합해야 함
+            float sum = 0.0f;
 
-            //커널 위치별로 순회하면서 
             for (int ky = -radius; ky <= radius; ++ky)
             {
                 for (int kx = -radius; kx <= radius; ++kx)
                 {
-                    const float w = kernel[(ky + radius) * kernelSize + (kx + radius)]; // w 에 컨볼루션 연산 수행한 값 저장 
-                    sum += IpSample(src, x + kx, y + ky, width, height) * w; // 누적 값
+                    const float w = kernel[(ky + radius) * kernelSize + (kx + radius)];
+                    sum += IpSample(src, x + kx, y + ky, width, height) * w;
                 }
             }
-            dst[y * width + x] = static_cast<unsigned char>(std::clamp(sum + 0.5f, 0.0f, 255.0f)); // 그리고 dst 에 저장 
-
+            dst[y * width + x] = static_cast<unsigned char>(std::clamp(sum + 0.5f, 0.0f, 255.0f));
         }
     }
     return IP_OK;

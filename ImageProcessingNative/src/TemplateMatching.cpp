@@ -1,10 +1,7 @@
 #include "ImageProcessingApi.h"
 #include "Common.hpp"
 #include <algorithm>
-#include <cmath>
-#include <cfloat>
-
-
+#include <cmath> 
 
 // template과 원본 차이 계산 
 
@@ -125,6 +122,10 @@ int IpTemplateMatch(const unsigned char* image, int imageWidth, int imageHeight,
     if (searchRoi != nullptr)
     {
 
+
+
+
+
         startX = std::max(0, searchRoi->X); // roi 영역 내에서만 탐색
         startY = std::max(0, searchRoi->Y);
         endX = std::min(endX, searchRoi->X + searchRoi->Width - templWidth + 1);
@@ -139,6 +140,8 @@ int IpTemplateMatch(const unsigned char* image, int imageWidth, int imageHeight,
 
     //가장 좋은 최적 값 저장
     double bestScore = -DBL_MAX;
+
+
 
     // X,Y엔 최적 위치 저장 
     int bestX = startX;

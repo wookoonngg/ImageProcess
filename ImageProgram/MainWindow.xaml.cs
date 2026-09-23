@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -33,6 +34,10 @@ namespace WpfImageProcessing
         private MatchingMethod _selectedMethod = MatchingMethod.Coeff;
         private bool _syncingViewers;
         private bool _uiReady;
+        private string? _lastLogMessage;
+        private readonly List<string> _pipelineSteps = new();
+        private readonly Stack<(PixelBuffer Buffer, string Step)> _undoStack = new();
+        private const int MaxUndoDepth = 8;
         private byte[]? _originalBgra;
         private int _displayWidth;
         private int _displayHeight;
@@ -49,7 +54,8 @@ namespace WpfImageProcessing
             SourceViewer.ViewportChanged += OnSourceViewportChanged;
             ResultViewer.ViewportChanged += OnResultViewportChanged;
             SourceViewer.RoiSelected += OnRoiSelected;
-            ResultViewer.RoiSelected += OnRoiSelected;
+            // Viewer 2는 ROI 선택 불가 (표시만)
+            ResultViewer.RoiSelectMode = false;
             Navigator.NavigateRequested += OnNavigatorNavigate;
             ResetMatchUi();
             SelectMethod(MatchingMethod.Coeff, log: false);
@@ -105,7 +111,6 @@ namespace WpfImageProcessing
             }
 
             StatusText.Text = $"Navigator 이동 → 이미지 좌표 ({e.ImageX:F0}, {e.ImageY:F0})";
-            AppendAnalysisLog($"Navigator 이동 → ({e.ImageX:F0}, {e.ImageY:F0})");
         }
 
         private void OnSourceViewportChanged(object? sender, ViewportChangedEventArgs e)
@@ -276,6 +281,7 @@ namespace WpfImageProcessing
                 Histogram.Clear();
                 RoiInfoText.Text = "ROI: -";
                 ClearMatchResultUi();
+                ClearPipeline();
                 RefreshTemplateStatusAfterImageOpen();
 
                 StatusText.Text = _isPreviewMode
@@ -339,7 +345,8 @@ namespace WpfImageProcessing
 
         private void SaveImage()
         {
-            if (_resultImage?.PixelData == null && !_isPreviewMode)
+            PixelBuffer? saveBuf = _workBuffer ?? _sourceBuffer;
+            if (saveBuf == null && _resultImage?.PixelData == null && !_isPreviewMode)
             {
                 MessageBox.Show("저장할 이미지가 없습니다.", "저장", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -348,7 +355,7 @@ namespace WpfImageProcessing
             var dialog = new SaveFileDialog
             {
                 Filter = Constants.BMP_FILTER,
-                Title = "BMP 이미지 저장",
+                Title = "BMP 저장 — Viewer2 전체 처리결과 (ROI만 저장하지 않음)",
                 FileName = _currentFilePath != null
                     ? Path.GetFileNameWithoutExtension(_currentFilePath) + "_result.bmp"
                     : "result.bmp"
@@ -359,19 +366,25 @@ namespace WpfImageProcessing
 
             try
             {
-                if (_isPreviewMode)
+                if (saveBuf != null)
                 {
-                    MessageBox.Show("Preview 모드에서는 Viewer 2 표시 이미지만 저장됩니다.\n전체 해상도 저장은 C++ 처리 연동 후 지원됩니다.",
-                        "안내", MessageBoxButton.OK, MessageBoxImage.Information);
-                    // Viewer 2에 표시된 이미지를 Bitmap으로 변환해 저장
-                    if (ResultViewer.CurrentRoi != null) { }
+                    using Bitmap bmp = saveBuf.ToBitmap();
+                    _imageFileService.SaveImage(bmp, dialog.FileName);
+                }
+                else if (_isPreviewMode)
+                {
+                    MessageBox.Show(
+                        "Preview 모드: Viewer 2에 표시 중인 전체 이미지를 저장합니다.\nROI만 잘라 저장하지 않습니다.",
+                        "Save BMP", MessageBoxButton.OK, MessageBoxImage.Information);
                     SavePreviewImage(dialog.FileName);
                 }
                 else
                 {
                     _imageFileService.SaveImage(_resultImage!.PixelData, dialog.FileName);
                 }
-                StatusText.Text = Constants.SUCCESS_FILE_SAVED;
+
+                StatusText.Text = "저장 완료 — 전체 처리결과 BMP";
+                AppendAnalysisLog($"Save BMP (전체결과): {Path.GetFileName(dialog.FileName)}");
             }
             catch (Exception ex)
             {
@@ -397,9 +410,9 @@ namespace WpfImageProcessing
         {
             bool on = RoiSelectToggle.IsChecked == true;
             SourceViewer.RoiSelectMode = on;
-            ResultViewer.RoiSelectMode = on;
+            ResultViewer.RoiSelectMode = false;
             StatusText.Text = on
-                ? "ROI Select 모드 — Viewer 1 또는 Viewer 2에서 드래그하세요. 연산은 ROI에만 적용됩니다."
+                ? "ROI Select 모드 — Viewer 1에서만 드래그하세요. 연산은 ROI에만 적용됩니다."
                 : "Pan 모드 — 드래그로 이미지 이동.";
         }
 
@@ -419,6 +432,10 @@ namespace WpfImageProcessing
 
         private void OnRoiSelected(object? sender, RoiData roi)
         {
+            // Viewer 1에서만 ROI 선택 허용
+            if (!ReferenceEquals(sender, SourceViewer))
+                return;
+
             _currentRoi = roi;
             SourceViewer.ShowRoi(roi);
             ResultViewer.ShowRoi(roi);
@@ -641,14 +658,27 @@ namespace WpfImageProcessing
         {
             if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
-            ApplyProcessingResult(_processing.RunSmoothing(buffer, BuildParams()));
+            var p = BuildParams();
+            ApplyProcessingResult(_processing.RunSmoothing(buffer, p), $"Smoothing(k={p.KernelSize})");
         }
 
         private void Process_Threshold(object sender, RoutedEventArgs e)
         {
             if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
-            ApplyProcessingResult(_processing.RunThreshold(buffer, BuildParams()));
+
+            var p = BuildParams();
+            if (ThresholdOtsuRadio.IsChecked == true)
+            {
+                p.ThresholdValue = ComputeOtsuThreshold(buffer, _currentRoi);
+                StatusText.Text = $"Otsu 자동 임계값 = {p.ThresholdValue}";
+            }
+
+            ApplyProcessingResult(
+                _processing.RunThreshold(buffer, p),
+                stepLabel: ThresholdOtsuRadio.IsChecked == true
+                    ? $"Threshold(Otsu={p.ThresholdValue})"
+                    : $"Threshold({p.ThresholdValue})");
         }
         private void Process_Gaussian(object sender, RoutedEventArgs e) =>
             RunFilter(FilterOperation.Gaussian);
@@ -671,6 +701,12 @@ namespace WpfImageProcessing
 
         private void SelectMethod(MatchingMethod method, bool log = true)
         {
+            if (_selectedMethod == method && log)
+            {
+                // 동일 방식 재선택은 로그 중복 방지
+                return;
+            }
+
             _selectedMethod = method;
             if (MatchMethodCombo != null)
             {
@@ -976,14 +1012,21 @@ namespace WpfImageProcessing
         {
             if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
-            ApplyProcessingResult(_processing.RunMorphology(op, buffer, BuildParams()));
+            var p = BuildParams();
+            ApplyProcessingResult(
+                _processing.RunMorphology(op, buffer, p),
+                $"{op}(k={p.KernelSize})");
         }
 
         private void RunFilter(FilterOperation op)
         {
             if (!TryBeginRoiProcessing(out PixelBuffer buffer))
                 return;
-            ApplyProcessingResult(_processing.RunFilter(op, buffer, BuildParams()));
+            var p = BuildParams();
+            string label = op == FilterOperation.Gaussian
+                ? $"Gaussian(k={p.KernelSize},σ={p.GaussianSigma:0.##})"
+                : op.ToString();
+            ApplyProcessingResult(_processing.RunFilter(op, buffer, p), label);
         }
 
         private bool TryBeginRoiProcessing(out PixelBuffer buffer)
@@ -1000,7 +1043,7 @@ namespace WpfImageProcessing
             return TryGetWorkBuffer(out buffer);
         }
 
-        private void ApplyProcessingResult(ProcessingResult result)
+        private void ApplyProcessingResult(ProcessingResult result, string? stepLabel = null)
         {
             ProcessingTimeText.Text = $"Processing Time: {result.ElapsedMs} ms ({result.OperationName})";
             if (!result.Success || result.OutputPixels == null)
@@ -1010,10 +1053,22 @@ namespace WpfImageProcessing
                 return;
             }
 
+            // Undo용 스냅샷 (최대 MaxUndoDepth)
+            if (_workBuffer != null)
+            {
+                _undoStack.Push((_workBuffer.Clone(), stepLabel ?? result.OperationName));
+                if (_undoStack.Count > MaxUndoDepth)
+                {
+                    var keep = _undoStack.Take(MaxUndoDepth).Reverse().ToList();
+                    _undoStack.Clear();
+                    foreach (var item in keep)
+                        _undoStack.Push(item);
+                }
+            }
+
             var outBuffer = new PixelBuffer(result.OutputPixels, result.Width, result.Height);
             _workBuffer = outBuffer;
 
-            // 원본 컬러 위에 ROI만 연산 결과 합성 (전체가 회색으로 바뀌는 문제 방지)
             BitmapSource display;
             if (_originalBgra != null && _currentRoi != null &&
                 outBuffer.Width == _displayWidth && outBuffer.Height == _displayHeight)
@@ -1034,10 +1089,95 @@ namespace WpfImageProcessing
                 ResultViewer.ShowRoi(_currentRoi);
             }
 
-            StatusText.Text =
-                $"{result.OperationName} 완료 — {result.ElapsedMs} ms — {result.Message}";
-            AppendAnalysisLog(
-                $"{result.OperationName} 완료 ({result.ElapsedMs}ms) — {result.Message}");
+            string step = stepLabel ?? result.OperationName;
+            _pipelineSteps.Add($"{_pipelineSteps.Count + 1}. {step} ({result.ElapsedMs}ms)");
+            RefreshPipelineUi();
+
+            StatusText.Text = $"{step} 완료 — {result.ElapsedMs} ms";
+            AppendAnalysisLog($"{step} 완료 ({result.ElapsedMs}ms) — {result.Message}");
+        }
+
+        private void UndoProcessing_Click(object sender, RoutedEventArgs e)
+        {
+            if (_undoStack.Count == 0 || _sourceBuffer == null)
+            {
+                MessageBox.Show("취소할 처리 단계가 없습니다.", "Undo", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var (prev, _) = _undoStack.Pop();
+            _workBuffer = prev;
+
+            if (_pipelineSteps.Count > 0)
+                _pipelineSteps.RemoveAt(_pipelineSteps.Count - 1);
+            RefreshPipelineUi();
+
+            BitmapSource display;
+            if (_pipelineSteps.Count == 0 && _originalDisplay != null)
+            {
+                display = _originalDisplay;
+            }
+            else if (_originalBgra != null && _currentRoi != null &&
+                     prev.Width == _displayWidth && prev.Height == _displayHeight)
+            {
+                byte[] composed = ComposeRoiResultBgra(_originalBgra, prev, _currentRoi);
+                display = BmpDisplayLoader.CreateBgraBitmap(composed, _displayWidth, _displayHeight);
+            }
+            else
+            {
+                using Bitmap bmp = prev.ToBitmap();
+                display = Utils.ImageConverter.BitmapToBitmapImage(bmp);
+            }
+
+            ResultViewer.SetImage(display, preserveView: true);
+            if (_currentRoi != null)
+            {
+                SourceViewer.ShowRoi(_currentRoi);
+                ResultViewer.ShowRoi(_currentRoi);
+            }
+
+            StatusText.Text = "Undo — 이전 처리 단계로 복구";
+            AppendAnalysisLog("Undo — 한 단계 취소");
+            ProcessingTimeText.Text = "Processing Time: 0 ms (Undo)";
+        }
+
+        private void RefreshPipelineUi()
+        {
+            if (PipelineList != null)
+            {
+                PipelineList.Items.Clear();
+                foreach (var s in _pipelineSteps)
+                    PipelineList.Items.Add(s);
+                if (PipelineList.Items.Count > 0)
+                    PipelineList.ScrollIntoView(PipelineList.Items[^1]!);
+            }
+
+            if (PipelineHeaderText != null)
+            {
+                if (_pipelineSteps.Count == 0)
+                {
+                    PipelineHeaderText.Text = "파이프라인: (없음)";
+                }
+                else
+                {
+                    var names = _pipelineSteps.Select(s =>
+                    {
+                        int a = s.IndexOf(". ", StringComparison.Ordinal);
+                        int b = s.LastIndexOf(" (", StringComparison.Ordinal);
+                        if (a >= 0 && b > a + 2)
+                            return s[(a + 2)..b];
+                        return s;
+                    });
+                    PipelineHeaderText.Text = "파이프라인: " + string.Join(" → ", names);
+                }
+            }
+        }
+
+        private void ClearPipeline()
+        {
+            _pipelineSteps.Clear();
+            _undoStack.Clear();
+            RefreshPipelineUi();
         }
 
         private void ResetProcessing_Click(object sender, RoutedEventArgs e)
@@ -1049,6 +1189,7 @@ namespace WpfImageProcessing
             }
 
             _workBuffer = _sourceBuffer.Clone();
+            ClearPipeline();
             ResultViewer.SetImage(_originalDisplay, preserveView: true);
             if (_currentRoi != null)
             {
@@ -1068,12 +1209,18 @@ namespace WpfImageProcessing
             if (AnalysisLogText == null)
                 return;
             AnalysisLogText.Text = "";
+            _lastLogMessage = null;
         }
 
         private void AppendAnalysisLog(string message)
         {
             if (AnalysisLogText == null)
                 return;
+
+            // 연속 동일 메시지 중복 방지
+            if (string.Equals(_lastLogMessage, message, StringComparison.Ordinal))
+                return;
+            _lastLogMessage = message;
 
             string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
             if (string.IsNullOrWhiteSpace(AnalysisLogText.Text))
@@ -1136,13 +1283,84 @@ namespace WpfImageProcessing
             return bgra;
         }
 
-        private ProcessingParams BuildParams() => new()
+        private static int ComputeOtsuThreshold(PixelBuffer buffer, RoiData? roi)
         {
-            KernelSize = 3,
-            ThresholdValue = 128,
-            GaussianSigma = 1.0,
-            Roi = _currentRoi
-        };
+            var hist = new int[256];
+            int x0 = 0, y0 = 0, x1 = buffer.Width, y1 = buffer.Height;
+            if (roi != null && roi.IsValid())
+            {
+                x0 = Math.Clamp(roi.StartX, 0, buffer.Width);
+                y0 = Math.Clamp(roi.StartY, 0, buffer.Height);
+                x1 = Math.Clamp(roi.StartX + roi.Width, 0, buffer.Width);
+                y1 = Math.Clamp(roi.StartY + roi.Height, 0, buffer.Height);
+            }
+
+            long total = 0;
+            for (int y = y0; y < y1; y++)
+            {
+                int row = y * buffer.Width;
+                for (int x = x0; x < x1; x++)
+                {
+                    hist[buffer.Data[row + x]]++;
+                    total++;
+                }
+            }
+            if (total <= 0) return 128;
+
+            double sumAll = 0;
+            for (int i = 0; i < 256; i++)
+                sumAll += i * hist[i];
+
+            double sumB = 0;
+            long wB = 0;
+            double maxVar = -1;
+            int best = 128;
+            for (int t = 0; t < 256; t++)
+            {
+                wB += hist[t];
+                if (wB == 0) continue;
+                long wF = total - wB;
+                if (wF == 0) break;
+                sumB += t * hist[t];
+                double mB = sumB / wB;
+                double mF = (sumAll - sumB) / wF;
+                double between = wB * (double)wF * (mB - mF) * (mB - mF);
+                if (between > maxVar)
+                {
+                    maxVar = between;
+                    best = t;
+                }
+            }
+            return best;
+        }
+
+        private ProcessingParams BuildParams()
+        {
+            int kernel = 3;
+            if (KernelSizeCombo?.SelectedItem is System.Windows.Controls.ComboBoxItem kItem &&
+                int.TryParse(kItem.Tag?.ToString(), out int kParsed))
+                kernel = kParsed;
+
+            int thresh = 128;
+            if (!int.TryParse(ThresholdValueBox?.Text, out thresh))
+                thresh = 128;
+            thresh = Math.Clamp(thresh, 0, 255);
+
+            double sigma = 1.0;
+            if (!double.TryParse(GaussianSigmaBox?.Text, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out sigma) &&
+                !double.TryParse(GaussianSigmaBox?.Text, out sigma))
+                sigma = 1.0;
+            if (sigma <= 0) sigma = 1.0;
+
+            return new ProcessingParams
+            {
+                KernelSize = kernel,
+                ThresholdValue = thresh,
+                GaussianSigma = sigma,
+                Roi = _currentRoi
+            };
+        }
 
         private bool TryGetWorkBuffer(out PixelBuffer buffer)
         {

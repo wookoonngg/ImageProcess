@@ -4,24 +4,17 @@
 
 int IpDilation(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, const IpRoi* roi)
 {
-
-
-    //예외처리 null 값들어오거나 영상 크기 이상한거 (0기준 ,w<h)
-
     if (!IpValidate(src, dst, width, height))
         return IP_ERR_NULL_PTR;
 
-
-    // 커널 사이즈 짜수로 보정 
     kernelSize = IpClampKernel(kernelSize);
-    const int radius = kernelSize / 2; // 반지름 구하기 
+    const int radius = kernelSize / 2;
 
     int startX, startY, endX, endY;
-    IpResolveRoi(roi, width, height, startX, startY, endX, endY); // roi 구하기 살펴볼 영역 정함
-    IpCopyImage(src, dst, width, height); // 원본 복사
+    IpResolveRoi(roi, width, height, startX, startY, endX, endY);
+    IpCopyImage(src, dst, width, height);
 
-
-    //x,y 이미지 전체 순회 하면서 max 값으로 ipSample 통과시켜서 갱신 
+#pragma omp parallel for schedule(static) if((endY - startY) * (endX - startX) > 2048)
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
@@ -38,30 +31,19 @@ int IpDilation(const unsigned char* src, unsigned char* dst, int width, int heig
     return IP_OK;
 }
 
-
-
-
-
-// 위에랑 똑같이 min
-
-
-
 int IpErosion(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, const IpRoi* roi)
 {
     if (!IpValidate(src, dst, width, height))
         return IP_ERR_NULL_PTR;
 
-
-
-
     kernelSize = IpClampKernel(kernelSize);
     const int radius = kernelSize / 2;
-
 
     int startX, startY, endX, endY;
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
     IpCopyImage(src, dst, width, height);
 
+#pragma omp parallel for schedule(static) if((endY - startY) * (endX - startX) > 2048)
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
@@ -69,12 +51,8 @@ int IpErosion(const unsigned char* src, unsigned char* dst, int width, int heigh
             unsigned char minVal = 255;
             for (int ky = -radius; ky <= radius; ++ky)
             {
-
                 for (int kx = -radius; kx <= radius; ++kx)
-
-
                     minVal = std::min(minVal, IpSample(src, x + kx, y + ky, width, height));
-                    // min 값으로 교체
             }
             dst[y * width + x] = minVal;
         }
