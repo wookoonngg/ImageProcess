@@ -7,20 +7,20 @@
 #include <intrin.h>
 #endif
 
-int IpThreshold(const unsigned char* src, unsigned char* dst, int width, int height, int thresholdValue, const IpRoi* roi)
-{
-    if (!IpValidate(src, dst, width, height))
-        return IP_ERR_NULL_PTR;
+    int IpThreshold(const unsigned char* src, unsigned char* dst, int width, int height, int thresholdValue, const IpRoi* roi)
+    {
+        if (!IpValidate(src, dst, width, height))
+            return IP_ERR_NULL_PTR;
 
-    thresholdValue = std::clamp(thresholdValue, 0, 255);
-    int startX, startY, endX, endY;
-    IpResolveRoi(roi, width, height, startX, startY, endX, endY);
-    IpCopyImage(src, dst, width, height);
+        thresholdValue = std::clamp(thresholdValue, 0, 255);
+        int startX, startY, endX, endY;
+        IpResolveRoi(roi, width, height, startX, startY, endX, endY);
+        IpCopyImage(src, dst, width, height);
 
-    if (startX >= endX || startY >= endY)
-        return IP_OK;
+        if (startX >= endX || startY >= endY)
+            return IP_OK;
 
-    const unsigned char t = static_cast<unsigned char>(thresholdValue);
+        const unsigned char t = static_cast<unsigned char>(thresholdValue);
 
 #if defined(_MSC_VER)
     const __m128i threshVec = _mm_set1_epi8(static_cast<char>(t));
