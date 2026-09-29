@@ -6,15 +6,15 @@
 
 
 
-// Ä¿³Î ¸¸µé±â ÇÊÅÍ¸¦ ¸¸µå´Â ÇÊÅÍ¸µÀº ¾Æ¤Ó¤¤°í 
+// Ä¿ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Í¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Í¸ï¿½ï¿½ï¿½ ï¿½Æ¤Ó¤ï¿½ï¿½ï¿½ 
 static void BuildGaussianKernel(int kernelSize, double sigma, std::vector<float>& kernel)
 {   
 
-    // Ä¿³Î Å©±â º¸Á¤
+    // Ä¿ï¿½ï¿½ Å©ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     kernelSize = IpClampKernel(kernelSize);
-    const int radius = kernelSize / 2; // Ä¿³Î ¿µ¿ª
+    const int radius = kernelSize / 2; // Ä¿ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
-    // ½Ã±×¸¶´Â ºÐ»êµÈ Á¤µµ 
+    // ï¿½Ã±×¸ï¿½ï¿½ï¿½ ï¿½Ð»ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ 
 
     if (sigma <= 0.0)
         sigma = std::max(0.5, kernelSize / 6.0);
@@ -23,31 +23,31 @@ static void BuildGaussianKernel(int kernelSize, double sigma, std::vector<float>
 
     kernel.assign(static_cast<size_t>(kernelSize * kernelSize), 0.0f);
 
-    // ´©ÀûÇØ¾ßµÈ±î sum º¯¼ö
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ø¾ßµÈ±ï¿½ sum ï¿½ï¿½ï¿½ï¿½
     double sum = 0.0;
     const double twoSigma2 = 2.0 * sigma * sigma;
 
 
-    //ÁßÃ¸À¸·Î ÇöÀç À§Ä¡ Ã£°í °¡ÁßÄ¡ 
+    //ï¿½ï¿½Ã¸ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡ Ã£ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ä¡ 
 
     for (int ky = -radius; ky <= radius; ++ky)
     {
         for (int kx = -radius; kx <= radius; ++kx)
         {
             const double v = std::exp(-(kx * kx + ky * ky) / twoSigma2);
-            kernel[(ky + radius) * kernelSize + (kx + radius)] = static_cast<float>(v); // exp °¡¿ì½Ã¾È ¿¬»ê Åë°úÇÑ °ªÀ» Ä¿³Î ÇÊÅÍ¿¡ ³Ö°í
-            sum += v; // ´©Àû
+            kernel[(ky + radius) * kernelSize + (kx + radius)] = static_cast<float>(v); // exp ï¿½ï¿½ï¿½ï¿½Ã¾ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Ä¿ï¿½ï¿½ ï¿½ï¿½ï¿½Í¿ï¿½ ï¿½Ö°ï¿½
+            sum += v; // ï¿½ï¿½ï¿½ï¿½
         }
     }
 
     for (float& w : kernel)
-        w = static_cast<float>(w / sum); /// ¹à±â º¯È­´Â ±×´ë·Î °¡Á®°¡¾ßµÇ´Ï±î ³ª´²
+        w = static_cast<float>(w / sum); /// ï¿½ï¿½ï¿½ ï¿½ï¿½È­ï¿½ï¿½ ï¿½×´ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ßµÇ´Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½
 
 
 }
 
 
-// °¡¿ì½Ã¾È ÇÊÅÍ¸µ ¸Þ¼Òµå 
+// ï¿½ï¿½ï¿½ï¿½Ã¾ï¿½ ï¿½ï¿½ï¿½Í¸ï¿½ ï¿½Þ¼Òµï¿½ 
 
 int IpGaussian(const unsigned char* src, unsigned char* dst, int width, int height, int kernelSize, double sigma, const IpRoi* roi)
 {
@@ -57,11 +57,11 @@ int IpGaussian(const unsigned char* src, unsigned char* dst, int width, int heig
     kernelSize = IpClampKernel(kernelSize);
     const int radius = kernelSize / 2;
     std::vector<float> kernel;
-    BuildGaussianKernel(kernelSize, sigma, kernel); // À§¿¡ Ä¿³Î °´Ã¼
+    BuildGaussianKernel(kernelSize, sigma, kernel); // ï¿½ï¿½ï¿½ï¿½ Ä¿ï¿½ï¿½ ï¿½ï¿½Ã¼
 
     int startX, startY, endX, endY;
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
-    IpCopyImage(src, dst, width, height); // dst º¹Á¦
+    IpCopyImage(src, dst, width, height); // dst ï¿½ï¿½ï¿½ï¿½
 
 #pragma omp parallel for schedule(static) if((endY - startY) * (endX - startX) > 2048)
     for (int y = startY; y < endY; ++y)
@@ -96,7 +96,7 @@ int IpLaplacian(const unsigned char* src, unsigned char* dst, int width, int hei
 
 
 
-    // ¶óÇÃ¶ó½Ã¾È Ä¿³Î 
+    // ï¿½ï¿½ï¿½Ã¶ï¿½Ã¾ï¿½ Ä¿ï¿½ï¿½ 
     static const int k[3][3] = {
         { 0, -1, 0 },
         { -1, 4, -1 },
@@ -107,22 +107,22 @@ int IpLaplacian(const unsigned char* src, unsigned char* dst, int width, int hei
     IpResolveRoi(roi, width, height, startX, startY, endX, endY);
     IpCopyImage(src, dst, width, height);
 
-    // ÀÌ¹ÌÁö ¼øÈ¸ÇÏ¸é¼­ 
+    // ï¿½Ì¹ï¿½ï¿½ï¿½ ï¿½ï¿½È¸ï¿½Ï¸é¼­ 
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
         {
             int sum = 0;
 
-            // Ä¿³Î ¼øÈ¸ 
+            // Ä¿ï¿½ï¿½ ï¿½ï¿½È¸ 
             for (int ky = -1; ky <= 1; ++ky)
             {
                 for (int kx = -1; kx <= 1; ++kx)
                     sum += static_cast<int>(IpSample(src, x + kx, y + ky, width, height)) * k[ky + 1][kx + 1];
-                // Ä¿³Î convolution ¿¬»ê ¼öÇà ÇÏ°í IpSample ¸Þ¼Òµå·Î °ª °»½Å
+                // Ä¿ï¿½ï¿½ convolution ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ï°ï¿½ IpSample ï¿½Þ¼Òµï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
             }
             dst[y * width + x] = static_cast<unsigned char>(std::clamp(std::abs(sum), 0, 255));
-            // ¹æÇâ »ó°ü ¾øÀÌ ¾Ë°í ½ÍÀ¸´Ï±î abs
+            // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ë°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½ abs
         }
     }
     return IP_OK;
@@ -136,7 +136,7 @@ int IpSobel(const unsigned char* src, unsigned char* dst, int width, int height,
 
 
 
-    // ¼Òº§Àº ¹æÇâ¼º Á¸ÀçÇÏ´Â Ä¿³Î µÎ°³ x Ä¿³Î , y Ä¿³Î 
+    // ï¿½Òºï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½â¼º ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½ Ä¿ï¿½ï¿½ ï¿½Î°ï¿½ x Ä¿ï¿½ï¿½ , y Ä¿ï¿½ï¿½ 
 
     static const int gx[3][3] = {
         { -1, 0, 1 },
@@ -155,7 +155,7 @@ int IpSobel(const unsigned char* src, unsigned char* dst, int width, int height,
 
 
 
-    // ÀÌ¹ÌÁö ¼øÈ¸
+    // ï¿½Ì¹ï¿½ï¿½ï¿½ ï¿½ï¿½È¸
     for (int y = startY; y < endY; ++y)
     {
         for (int x = startX; x < endX; ++x)
@@ -170,12 +170,12 @@ int IpSobel(const unsigned char* src, unsigned char* dst, int width, int height,
                 for (int kx = -1; kx <= 1; ++kx)
                 {
                     const int v = IpSample(src, x + kx, y + ky, width, height);
-                    sx += v * gx[ky + 1][kx + 1]; // ÁÂ¿ì Â÷ÀÌ °è»ê ÇØ¼­ ¼¼·Î¼± ³ª¿È
-                    sy += v * gy[ky + 1][kx + 1]; // »óÇÏ Â÷ÀÌ °è»ê °¡·Î¼± 
+                    sx += v * gx[ky + 1][kx + 1]; // ï¿½Â¿ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½Ø¼ï¿½ ï¿½ï¿½ï¿½Î¼ï¿½ ï¿½ï¿½ï¿½ï¿½
+                    sy += v * gy[ky + 1][kx + 1]; // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Î¼ï¿½ 
                 }
             }
 
-            // ¸¶Áö¸· sqrt ¿¬»ê ÇØ¼­ °­µµ ±¸ÇÏ±â 
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ sqrt ï¿½ï¿½ï¿½ï¿½ ï¿½Ø¼ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ï±ï¿½ 
             const int mag = static_cast<int>(std::sqrt(static_cast<double>(sx * sx + sy * sy)));
             dst[y * width + x] = static_cast<unsigned char>(std::clamp(mag, 0, 255));
         }

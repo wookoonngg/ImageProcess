@@ -81,7 +81,7 @@ namespace WpfImageProcessing
             PanelMatching.Visibility = Visibility.Collapsed;
             TabPreprocessBtn.IsChecked = true;
             TabMatchingBtn.IsChecked = false;
-            StatusText.Text = "전처리 탭 — ROI 선택 후 필터/형태학/이진화 적용";
+            StatusText.Text = "전처리 탭 — ROI 없으면 전체, 있으면 선택 영역에만 적용";
         }
 
         private void ShowMatchingTab()
@@ -412,7 +412,7 @@ namespace WpfImageProcessing
             SourceViewer.RoiSelectMode = on;
             ResultViewer.RoiSelectMode = false;
             StatusText.Text = on
-                ? "ROI Select 모드 — Viewer 1에서만 드래그하세요. 연산은 ROI에만 적용됩니다."
+                ? "ROI Select 모드 — Viewer 1에서 드래그. 선택 시 해당 영역만, 없으면 전체에 적용됩니다."
                 : "Pan 모드 — 드래그로 이미지 이동.";
         }
 
@@ -426,8 +426,8 @@ namespace WpfImageProcessing
             RoiSelectToggle.IsChecked = false;
             SourceViewer.RoiSelectMode = false;
             ResultViewer.RoiSelectMode = false;
-            StatusText.Text = "ROI가 취소되었습니다.";
-            AppendAnalysisLog("ROI 취소");
+            StatusText.Text = "ROI 취소 — 이후 연산은 전체 이미지에 적용됩니다.";
+            AppendAnalysisLog("ROI 취소 (전체 적용)");
         }
 
         private void OnRoiSelected(object? sender, RoiData roi)
@@ -441,7 +441,7 @@ namespace WpfImageProcessing
             ResultViewer.ShowRoi(roi);
             RoiInfoText.Text = roi.ToString();
             UpdateHistogramPlaceholder(roi);
-            StatusText.Text = $"ROI 선택됨: {roi} — 이후 연산은 이 영역에만 적용됩니다.";
+            StatusText.Text = $"ROI 선택됨: {roi} — 이후 연산은 이 영역에만 적용됩니다. (취소 시 전체 적용)";
             AppendAnalysisLog($"ROI 선택: ({roi.StartX},{roi.StartY}) {roi.Width}×{roi.Height}");
         }
 
@@ -656,7 +656,7 @@ namespace WpfImageProcessing
             RunMorphology(MorphologyOperation.Erosion);
         private void Process_Smoothing(object sender, RoutedEventArgs e)
         {
-            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
+            if (!TryBeginProcessing(out PixelBuffer buffer))
                 return;
             var p = BuildParams();
             ApplyProcessingResult(_processing.RunSmoothing(buffer, p), $"Smoothing(k={p.KernelSize})");
@@ -664,7 +664,7 @@ namespace WpfImageProcessing
 
         private void Process_Threshold(object sender, RoutedEventArgs e)
         {
-            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
+            if (!TryBeginProcessing(out PixelBuffer buffer))
                 return;
 
             var p = BuildParams();
@@ -1010,7 +1010,7 @@ namespace WpfImageProcessing
 
         private void RunMorphology(MorphologyOperation op)
         {
-            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
+            if (!TryBeginProcessing(out PixelBuffer buffer))
                 return;
             var p = BuildParams();
             ApplyProcessingResult(
@@ -1020,7 +1020,7 @@ namespace WpfImageProcessing
 
         private void RunFilter(FilterOperation op)
         {
-            if (!TryBeginRoiProcessing(out PixelBuffer buffer))
+            if (!TryBeginProcessing(out PixelBuffer buffer))
                 return;
             var p = BuildParams();
             string label = op == FilterOperation.Gaussian
@@ -1029,19 +1029,9 @@ namespace WpfImageProcessing
             ApplyProcessingResult(_processing.RunFilter(op, buffer, p), label);
         }
 
-        private bool TryBeginRoiProcessing(out PixelBuffer buffer)
-        {
-            buffer = null!;
-            if (_currentRoi == null || !_currentRoi.IsValid())
-            {
-                MessageBox.Show(
-                    "먼저 원본 Viewer에서 ROI를 선택하세요.\n연산은 선택된 ROI 영역에만 적용됩니다.",
-                    "ROI 필요", MessageBoxButton.OK, MessageBoxImage.Information);
-                return false;
-            }
-
-            return TryGetWorkBuffer(out buffer);
-        }
+        /// <summary>작업 버퍼 확보. ROI는 선택사항(없으면 전체 이미지).</summary>
+        private bool TryBeginProcessing(out PixelBuffer buffer) =>
+            TryGetWorkBuffer(out buffer);
 
         private void ApplyProcessingResult(ProcessingResult result, string? stepLabel = null)
         {
