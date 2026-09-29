@@ -6,15 +6,15 @@
 
 
 
-// Ŀ�� ����� ���͸� ����� ���͸��� �ƤӤ��� 
+// 가우시안 커널 필터를 일단 만들고 얘를 돌림
 static void BuildGaussianKernel(int kernelSize, double sigma, std::vector<float>& kernel)
 {   
 
-    // Ŀ�� ũ�� ����
+    // 커널 사이즈 보정 홀수
     kernelSize = IpClampKernel(kernelSize);
-    const int radius = kernelSize / 2; // Ŀ�� ����
+    const int radius = kernelSize / 2; 
 
-    // �ñ׸��� �л�� ���� 
+	// 시그마 변수 0 이하이면 커널 사이즈에 따라 적당히 설정
 
     if (sigma <= 0.0)
         sigma = std::max(0.5, kernelSize / 6.0);
