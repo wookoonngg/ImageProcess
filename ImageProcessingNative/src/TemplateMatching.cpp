@@ -1,176 +1,155 @@
 #include "ImageProcessingApi.h"
 #include "Common.hpp"
 #include <algorithm>
-#include <cmath> 
+#include <cmath>
+#include <cfloat>
 
-// template과 원본 차이 계산 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 static double ScoreDiff(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
-
-
-    double sum = 0.0; 
-
-
     const double area = static_cast<double>(templWidth) * templHeight;
+    long long sum = 0;
 
     for (int ty = 0; ty < templHeight; ++ty)
     {
-        for (int tx = 0; tx < templWidth; ++tx)
+        const unsigned char* irow = image + (oy + ty) * imageWidth + ox;
+        const unsigned char* trow = templ + ty * templWidth;
+        int tx = 0;
+
+#if defined(_MSC_VER)
+        __m128i acc = _mm_setzero_si128();
+        const __m128i z = _mm_setzero_si128();
+        for (; tx + 16 <= templWidth; tx += 16)
         {
-            const int diff = static_cast<int>(image[(oy + ty) * imageWidth + (ox + tx)]) - static_cast<int>(templ[ty * templWidth + tx]); // 걍 빼고
-
-            // 뺀건 제곱 - 음수 없애기 혹시나 
-
-            sum += diff * diff;
-
-
+            __m128i a = _mm_loadu_si128((const __m128i*)(irow + tx));
+            __m128i b = _mm_loadu_si128((const __m128i*)(trow + tx));
+            __m128i d0 = _mm_sub_epi16(_mm_unpacklo_epi8(a, z), _mm_unpacklo_epi8(b, z));
+            __m128i d1 = _mm_sub_epi16(_mm_unpackhi_epi8(a, z), _mm_unpackhi_epi8(b, z));
+            acc = _mm_add_epi32(acc, _mm_madd_epi16(d0, d0));
+            acc = _mm_add_epi32(acc, _mm_madd_epi16(d1, d1));
+        }
+        acc = _mm_add_epi32(acc, _mm_srli_si128(acc, 8));
+        acc = _mm_add_epi32(acc, _mm_srli_si128(acc, 4));
+        sum += _mm_cvtsi128_si32(acc);
+#endif
+        for (; tx < templWidth; ++tx)
+        {
+            int d = (int)irow[tx] - (int)trow[tx];
+            sum += d * d;
         }
     }
-    // 낮을수록 유사 → 점수는 1 / (1 + meanSSE)
-    return 1.0 / (1.0 + sum / area);
+    return 1.0 / (1.0 + (double)sum / area);
 }
 
-static double ScoreCorr( const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
+static double ScoreCorr(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
-
-
-    double sumIT = 0.0;
-    double sumI2 = 0.0;
-    double sumT2 = 0.0;
-
-
+    long long sumIT = 0, sumI2 = 0, sumT2 = 0;
     for (int ty = 0; ty < templHeight; ++ty)
     {
-        for (int tx = 0; tx < templWidth; ++tx)
+        const unsigned char* irow = image + (oy + ty) * imageWidth + ox;
+        const unsigned char* trow = templ + ty * templWidth;
+        int tx = 0;
+#if defined(_MSC_VER)
+        __m128i aIT = _mm_setzero_si128(), aI2 = _mm_setzero_si128(), aT2 = _mm_setzero_si128();
+        const __m128i z = _mm_setzero_si128();
+        for (; tx + 16 <= templWidth; tx += 16)
         {
-
-
-            const double iv = image[(oy + ty) * imageWidth + (ox + tx)];
-            const double tv = templ[ty * templWidth + tx];
-            sumIT += iv * tv;
-            sumI2 += iv * iv;
-            sumT2 += tv * tv;
+            __m128i a = _mm_loadu_si128((const __m128i*)(irow + tx));
+            __m128i b = _mm_loadu_si128((const __m128i*)(trow + tx));
+            __m128i loA = _mm_unpacklo_epi8(a, z), loB = _mm_unpacklo_epi8(b, z);
+            __m128i hiA = _mm_unpackhi_epi8(a, z), hiB = _mm_unpackhi_epi8(b, z);
+            aIT = _mm_add_epi32(aIT, _mm_add_epi32(_mm_madd_epi16(loA, loB), _mm_madd_epi16(hiA, hiB)));
+            aI2 = _mm_add_epi32(aI2, _mm_add_epi32(_mm_madd_epi16(loA, loA), _mm_madd_epi16(hiA, hiA)));
+            aT2 = _mm_add_epi32(aT2, _mm_add_epi32(_mm_madd_epi16(loB, loB), _mm_madd_epi16(hiB, hiB)));
+        }
+        aIT = _mm_add_epi32(aIT, _mm_srli_si128(aIT, 8)); aIT = _mm_add_epi32(aIT, _mm_srli_si128(aIT, 4));
+        aI2 = _mm_add_epi32(aI2, _mm_srli_si128(aI2, 8)); aI2 = _mm_add_epi32(aI2, _mm_srli_si128(aI2, 4));
+        aT2 = _mm_add_epi32(aT2, _mm_srli_si128(aT2, 8)); aT2 = _mm_add_epi32(aT2, _mm_srli_si128(aT2, 4));
+        sumIT += _mm_cvtsi128_si32(aIT); sumI2 += _mm_cvtsi128_si32(aI2); sumT2 += _mm_cvtsi128_si32(aT2);
+#endif
+        for (; tx < templWidth; ++tx)
+        {
+            long long iv = irow[tx], tv = trow[tx];
+            sumIT += iv * tv; sumI2 += iv * iv; sumT2 += tv * tv;
         }
     }
-    const double denom = std::sqrt(sumI2 * sumT2);
-    if (denom < 1e-9)
-        return 0.0;
-    return sumIT / denom;
+    double denom = std::sqrt((double)sumI2 * (double)sumT2);
+    return (denom < 1e-9) ? 0.0 : (double)sumIT / denom;
 }
 
-static double ScoreCoeff(
-    const unsigned char* image, int imageWidth,
-    const unsigned char* templ, int templWidth, int templHeight,
-    int ox, int oy)
+static double ScoreCoeff(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
-    const double area = static_cast<double>(templWidth) * templHeight;
+    const double area = (double)templWidth * templHeight;
     double sumI = 0.0, sumT = 0.0;
     for (int ty = 0; ty < templHeight; ++ty)
-    {
         for (int tx = 0; tx < templWidth; ++tx)
         {
             sumI += image[(oy + ty) * imageWidth + (ox + tx)];
             sumT += templ[ty * templWidth + tx];
         }
-    }
-    const double meanI = sumI / area;
-    const double meanT = sumT / area;
-
+    const double meanI = sumI / area, meanT = sumT / area;
     double num = 0.0, denI = 0.0, denT = 0.0;
     for (int ty = 0; ty < templHeight; ++ty)
-    {
         for (int tx = 0; tx < templWidth; ++tx)
         {
-            const double di = image[(oy + ty) * imageWidth + (ox + tx)] - meanI;
-            const double dt = templ[ty * templWidth + tx] - meanT;
+            double di = image[(oy + ty) * imageWidth + (ox + tx)] - meanI;
+            double dt = templ[ty * templWidth + tx] - meanT;
             num += di * dt;
             denI += di * di;
             denT += dt * dt;
         }
-    }
-    const double denom = std::sqrt(denI * denT);
-    if (denom < 1e-9)
-        return 0.0;
-    return num / denom;
+    double denom = std::sqrt(denI * denT);
+    return (denom < 1e-9) ? 0.0 : num / denom;
 }
 
-int IpTemplateMatch(const unsigned char* image, int imageWidth, int imageHeight, const unsigned char* templ, int templWidth, int templHeight,int method, IpMatchResult* outResult,const IpRoi* searchRoi)
+int IpTemplateMatch(const unsigned char* image, int imageWidth, int imageHeight,
+    const unsigned char* templ, int templWidth, int templHeight,
+    int method, IpMatchResult* outResult, const IpRoi* searchRoi)
 {
     if (image == nullptr || templ == nullptr || outResult == nullptr)
         return IP_ERR_NULL_PTR;
     if (imageWidth <= 0 || imageHeight <= 0 || templWidth <= 0 || templHeight <= 0)
         return IP_ERR_INVALID_SIZE;
-    if (templWidth > imageWidth || templHeight > imageHeight)
-    if (method < 0 || method > 2)
-        return IP_ERR_INVALID_PARAM;
+    if (templWidth > imageWidth || templHeight > imageHeight || method < 0 || method > 2)
         return IP_ERR_INVALID_PARAM;
 
-
-
-
-    int startX = 0;
-    int startY = 0;
-
-    // 끝지점 걍 끝으로 하면 템플릿 넘어감 그만큼 빼고 끝점 지정
-
+    int startX = 0, startY = 0;
     int endX = imageWidth - templWidth + 1;
     int endY = imageHeight - templHeight + 1;
-
-
-    //roi가 있을 때 
     if (searchRoi != nullptr)
     {
-
-
-
-
-
-        startX = std::max(0, searchRoi->X); // roi 영역 내에서만 탐색
+        startX = std::max(0, searchRoi->X);
         startY = std::max(0, searchRoi->Y);
         endX = std::min(endX, searchRoi->X + searchRoi->Width - templWidth + 1);
         endY = std::min(endY, searchRoi->Y + searchRoi->Height - templHeight + 1);
     }
-
-
-
     if (startX >= endX || startY >= endY)
         return IP_ERR_INVALID_PARAM;
 
-
-    //가장 좋은 최적 값 저장
     double bestScore = -DBL_MAX;
+    int bestX = startX, bestY = startY;
 
-
-
-    // X,Y엔 최적 위치 저장 
-    int bestX = startX;
-    int bestY = startY;
-
-
-    // 슬라이딩 템플릿을 움직이면서
-
-    for (int y = startY; y < endY; ++y)
+#pragma omp parallel
     {
-        for (int x = startX; x < endX; ++x)
+        double localBest = -DBL_MAX;
+        int lx = startX, ly = startY;
+#pragma omp for schedule(static) nowait
+        for (int y = startY; y < endY; ++y)
         {
-            //매 위치마다 유사도 계산 
-            double score = 0.0;
-            switch (method)
+            for (int x = startX; x < endX; ++x)
             {
-            case 0: score = ScoreDiff(image, imageWidth, templ, templWidth, templHeight, x, y); break;
-            case 1: score = ScoreCorr(image, imageWidth, templ, templWidth, templHeight, x, y); break;
-            case 2: score = ScoreCoeff(image, imageWidth, templ, templWidth, templHeight, x, y); break;
-            default: break;
-            }
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestX = x;
-                bestY = y;
+                double score = 0.0;
+                if (method == 0) score = ScoreDiff(image, imageWidth, templ, templWidth, templHeight, x, y);
+                else if (method == 1) score = ScoreCorr(image, imageWidth, templ, templWidth, templHeight, x, y);
+                else score = ScoreCoeff(image, imageWidth, templ, templWidth, templHeight, x, y);
+                if (score > localBest) { localBest = score; lx = x; ly = y; }
             }
         }
+#pragma omp critical
+        if (localBest > bestScore) { bestScore = localBest; bestX = lx; bestY = ly; }
     }
 
     outResult->BestX = bestX;

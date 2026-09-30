@@ -24,6 +24,11 @@ int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int hei
 
     const float invArea = 1.0f / static_cast<float>(kernelSize * kernelSize);
     const int area = kernelSize * kernelSize;
+
+
+
+
+
     // epi16 합 overflow 방지: 255 * area <= 65535
     const bool useSimd = (area <= 255);
 
@@ -33,6 +38,10 @@ int IpSmoothing(const unsigned char* src, unsigned char* dst, int width, int hei
     const int safeEndY = std::min(endY, height - radius);
 
 #pragma omp parallel for schedule(static) if((endY - startY) * (endX - startX) > 2048)
+
+
+
+
     for (int y = startY; y < endY; ++y)
     {
         int x = startX;

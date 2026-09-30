@@ -11,10 +11,17 @@ namespace WpfImageProcessing.Utils
     /// WPF BitmapImage는 2GB 초과 / 초대형 BMP에서 실패하므로,
     /// 큰 파일은 헤더 기준으로 픽셀을 직접 샘플링한다.
     /// </summary>
+    /// 
+
+
+
     public static class BmpDisplayLoader
     {
         public static BitmapSource Load(string filePath, BitmapFileInfo info)
         {
+
+
+
             bool useDirectSample =
                 info.FileSize > Constants.PREVIEW_MODE_BYTES ||
                 info.GetActualPixelDataSize() > Constants.PREVIEW_MODE_BYTES ||
