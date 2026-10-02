@@ -58,11 +58,17 @@ inline unsigned char IpSample(const unsigned char* src, int x, int y, int width,
     return src[y * width + x];
 }
 
-inline int IpClampKernel(int kernelSize)
+inline int IpClampKernel(int kernelSize) // 커널 사이즈 보정 
 {
     if (kernelSize < 1)
         return 1;
+
+
+
     if ((kernelSize & 1) == 0)
         ++kernelSize;
+
+
+
     return kernelSize;
 }

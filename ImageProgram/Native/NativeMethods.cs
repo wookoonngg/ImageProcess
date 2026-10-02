@@ -1,3 +1,6 @@
+
+
+
 using System.Runtime.InteropServices;
 using WpfImageProcessing.Models;
 
@@ -17,13 +20,20 @@ namespace WpfImageProcessing.Native
         public int Width;
         public int Height;
 
+
         public static IpRoi From(RoiData roi) => new()
         {
+
+
             X = roi.StartX,
             Y = roi.StartY,
             Width = roi.Width,
             Height = roi.Height
+
+
         };
+
+
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -44,6 +54,8 @@ namespace WpfImageProcessing.Native
 
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern int IpDilation(byte[] src, byte[] dst, int width, int height, int kernelSize, IntPtr roi);
+
+
 
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern int IpErosion(byte[] src, byte[] dst, int width, int height, int kernelSize, IntPtr roi);
@@ -82,5 +94,15 @@ namespace WpfImageProcessing.Native
             byte[] src, int width, int height,
             IntPtr roi,
             int[] bins256);
+
+
+
+
+
     }
+
+
+
+
+
 }
