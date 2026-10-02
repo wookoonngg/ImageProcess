@@ -1,0 +1,63 @@
+classDiagram
+    direction TB
+
+    class MainWindow {
+        +Open / Save
+        +전처리 · Matching 버튼
+        +ROI 선택 / 취소
+        +Undo / Reset
+    }
+
+    class ImageViewerControl {
+        +SetImage()
+        +RoiSelectMode
+        +ShowRoi() / ClearRoi()
+    }
+
+    class ImageFileService {
+        +ReadHeader()
+        +LoadImage()
+        +SaveImage()
+    }
+
+    class ImageProcessingFacade {
+        +RunMorphology()
+        +RunFilter()
+        +RunSmoothing()
+        +RunThreshold()
+        +RunMatching()
+        +RegisterTemplate()
+    }
+
+    class NativeImageProcessingBridge {
+        +P/Invoke 호출
+        +ROI pin / 타이밍
+    }
+
+    class PixelBuffer {
+        +byte[] Data
+        +Width / Height
+    }
+
+    class RoiData {
+        +StartX / StartY
+        +Width / Height
+    }
+
+    class ImageProcessingNative {
+        <<C++ DLL>>
+        IpDilation / IpErosion
+        IpGaussian / IpLaplacian / IpSobel
+        IpSmoothing / IpThreshold
+        IpTemplateMatch
+    }
+
+    MainWindow *-- ImageViewerControl : Source, Result
+    MainWindow --> ImageFileService : BMP I/O
+    MainWindow --> ImageProcessingFacade : 영상처리
+    MainWindow --> PixelBuffer : 작업 버퍼
+    MainWindow --> RoiData : 선택 영역
+
+    ImageProcessingFacade --> NativeImageProcessingBridge
+    NativeImageProcessingBridge ..> ImageProcessingNative : DllImport
+    ImageProcessingFacade ..> PixelBuffer

@@ -1,0 +1,11 @@
+flowchart LR
+    A[BMP 파일] --> B[ImageFileService]
+    B --> C[표시: BitmapSource]
+    B --> D[연산: PixelBuffer]
+    C --> E[Viewer]
+    D --> F[Facade]
+    F --> G[Bridge]
+    G --> H[C++ DLL]
+    H --> I[결과 PixelBuffer]
+    I --> E
+    J[RoiData?] -.-> F

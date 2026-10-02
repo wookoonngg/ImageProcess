@@ -1,0 +1,18 @@
+flowchart TB
+    subgraph CS["ImageProgram / WPF C#"]
+        MW["MainWindow.xaml(.cs)<br/>화면·이벤트 허브"]
+        CTL["Controls/<br/>Viewer · Navigator · Histogram"]
+        SVC["Services/<br/>ImageFileService<br/>ImageProcessingFacade<br/>NativeImageProcessingBridge"]
+        MOD["Models/ · Native/<br/>RoiData · TemplateData · PixelBuffer"]
+        MW --- CTL
+        MW --- SVC
+        MW --- MOD
+    end
+
+    subgraph CPP["ImageProcessingNative / C++ DLL"]
+        API["include/ImageProcessingApi.h"]
+        SRC["src/<br/>Morphology · Filter · Smoothing<br/>Threshold · TemplateMatching"]
+        API --- SRC
+    end
+
+    SVC -->|P/Invoke| CPP

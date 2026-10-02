@@ -1,142 +1,75 @@
-# ImageProgram — 발표용 클래스 다이어그램
+# ImageProgram — 최종 발표용 시스템 아키텍처
 
-> 현재 코드 기준. **한 장 = 한 메시지**. 슬라이드에는 다이어그램만 넣고, 아래 한 줄 설명을 자막으로 쓰면 됩니다.  
-> Mermaid는 GitHub / Notion / VS Code / [mermaid.live](https://mermaid.live) 에서 이미지로보내기 가능합니다.
+> **한 장 = 한 메시지.** 슬라이드에는 다이어그램만, 설명은 아래 한 줄만 쓰면 됩니다.  
+> Mermaid → [mermaid.live](https://mermaid.live) 에서 PNG/SVG로 내보내기.
 
 ---
 
-## 0. 한눈에 보기 — 계층 흐름
+## 1. 시스템 아키텍처 (계층)
 
-**메시지:** UI는 Facade만 보고, 알고리즘은 C++ DLL에만 있다.
+**메시지:** UI는 Facade만 보고, 실제 알고리즘은 C++ DLL에만 있다.
 
 ```mermaid
-flowchart LR
-    subgraph UI["① Presentation"]
+flowchart TB
+    subgraph UI["Presentation (WPF)"]
         MW[MainWindow]
-        V1[SourceViewer]
-        V2[ResultViewer]
-        NAV[Navigator]
-        HIST[Histogram]
+        V[ImageViewerControl<br/>Source / Result]
+        N[NavigatorControl]
+        H[HistogramControl]
     end
 
-    subgraph APP["② Application"]
-        MW
-    end
-
-    subgraph SVC["③ Services"]
-        IFS[ImageFileService]
+    subgraph SVC["Application / Service"]
+        FS[ImageFileService]
         FAC[ImageProcessingFacade]
         BR[NativeImageProcessingBridge]
     end
 
-    subgraph DATA["④ Models / Buffer"]
-        ID[ImageData]
-        PB[PixelBuffer]
+    subgraph DATA["Data"]
+        PB[PixelBuffer Gray8]
         ROI[RoiData]
         TPL[TemplateData]
     end
 
-    subgraph NATIVE["⑤ Native C++"]
-        DLL[ImageProcessingNative.dll]
+    subgraph NATIVE["Native C++ DLL"]
+        DLL[ImageProcessingNative.dll<br/>Morphology · Filter · Threshold<br/>Smoothing · TemplateMatching]
     end
 
-    MW --> V1 & V2 & NAV & HIST
-    MW --> IFS
+    MW --> V & N & H
+    MW --> FS
     MW --> FAC
     FAC --> BR
-    BR --> DLL
-    MW --> ID & PB & ROI & TPL
-    IFS --> ID
+    BR -->|P/Invoke| DLL
+    MW --> PB & ROI & TPL
     FAC --> PB
 ```
 
 ```text
-사용자 조작 → MainWindow → Facade → Bridge(P/Invoke) → C++ DLL
-                              ↘ ImageFileService → BMP 파일
-결과 표시 ← Viewer / Histogram / Navigator ← MainWindow
+사용자 조작 → MainWindow → Facade → Bridge → C++ DLL
+                 ↘ ImageFileService → BMP 입출력
+결과 ← Viewer / Navigator / Histogram
 ```
 
 ---
 
-## 1. UI 구성 (화면이 어떻게 나뉘는가)
+## 2. 핵심 클래스 다이어그램
 
-**메시지:** MainWindow가 컨트롤을 조립하고, Viewer가 ROI·뷰포트를 만든다.
-
-```mermaid
-classDiagram
-    direction LR
-
-    class MainWindow {
-        +SourceViewer
-        +ResultViewer
-        +Navigator
-        +Histogram
-        +OpenImage()
-        +SaveImage()
-        +처리 버튼 핸들러들
-    }
-
-    class ImageViewerControl {
-        +RoiSelectMode
-        +SetImage()
-        +ShowRoi()
-        +event ViewportChanged
-        +event RoiSelected
-    }
-
-    class NavigatorControl {
-        +SetPreviewImage()
-        +UpdateViewport()
-        +event NavigateRequested
-    }
-
-    class HistogramControl {
-        +SetHistogram(bins)
-        +Clear()
-    }
-
-    MainWindow *-- ImageViewerControl : Source / Result
-    MainWindow *-- NavigatorControl
-    MainWindow *-- HistogramControl
-
-    ImageViewerControl ..> NavigatorControl : ViewportChanged
-    NavigatorControl ..> ImageViewerControl : NavigateRequested
-    ImageViewerControl ..> MainWindow : RoiSelected
-```
-
-| 컨트롤 | 역할 (한 줄) |
-|--------|-------------|
-| SourceViewer | 원본 표시 + ROI 드래그 |
-| ResultViewer | 처리/매칭 결과 표시 |
-| Navigator | 전체 위치 미니맵 |
-| Histogram | ROI 밝기 분포 |
-
----
-
-## 2. 파일 열기 / 저장
-
-**메시지:** 헤더만 먼저 읽고, 대용량은 Preview 버퍼로 처리한다.
+**메시지:** 호출은 항상 MainWindow → Facade → Bridge → DLL. UI는 Native를 직접 모른다.
 
 ```mermaid
 classDiagram
     direction TB
 
     class MainWindow {
-        -IImageFileService _imageFileService
-        -ImageData? _sourceImage
-        -ImageData? _resultImage
-        -PixelBuffer? _sourceBuffer
-        -PixelBuffer? _workBuffer
-        -BitmapFileInfo? _headerInfo
-        +OpenImage()
-        +SaveImage()
+        +Open / Save
+        +전처리 · Matching 버튼
+        +ROI 선택 / 취소
+        +Undo / Reset
     }
 
-    class IImageFileService {
-        <<interface>>
-        +ReadHeader(path) BitmapFileInfo
-        +LoadImage(path) Bitmap
-        +SaveImage(bitmap, path)
+    class ImageViewerControl {
+        +SetImage()
+        +RoiSelectMode
+        +ShowRoi() / ClearRoi()
     }
 
     class ImageFileService {
@@ -145,272 +78,119 @@ classDiagram
         +SaveImage()
     }
 
-    class BitmapFileInfo {
-        +Width
-        +Height
-        +BitDepth
-        +FileSize
-        +IsValid()
-    }
-
-    class ImageData {
-        +SourceFilePath
-        +Bitmap PixelData
-        +Dispose()
-    }
-
-    class BmpDisplayLoader {
-        <<static util>>
-        +Load()
-        +LoadSubsampledPixels()
-    }
-
-    MainWindow --> IImageFileService : uses
-    IImageFileService <|.. ImageFileService
-    ImageFileService ..> BitmapFileInfo : creates
-    MainWindow --> ImageData : owns
-    MainWindow ..> BmpDisplayLoader : Preview 표시
-```
-
-```text
-Open 흐름
-  ReadHeader → (작으면) LoadImage + PixelBuffer
-             → (크면)  Subsample Preview → PixelBuffer
-  → Viewer / Navigator 갱신
-```
-
----
-
-## 3. 영상처리 파이프라인 (핵심)
-
-**메시지:** MainWindow → Facade → Bridge → NativeMethods → DLL. UI는 C++를 모른다.
-
-```mermaid
-classDiagram
-    direction TB
-
-    class MainWindow {
-        -IImageProcessingFacade _processing
-        +Process_Gaussian()
-        +Process_Sobel()
-        +Process_Threshold()
-        +...
-    }
-
-    class IImageProcessingFacade {
-        <<interface>>
+    class ImageProcessingFacade {
         +RunMorphology()
         +RunFilter()
         +RunSmoothing()
         +RunThreshold()
         +RunMatching()
         +RegisterTemplate()
-        +GetHistogram()
-    }
-
-    class ImageProcessingFacade {
-        +Bridge
-    }
-
-    class IImageProcessingBridge {
-        <<interface>>
-        +Dilation / Erosion
-        +Gaussian / Laplacian / Sobel
-        +Smoothing / Threshold
-        +TemplateMatch()
-        +ExtractTemplate()
-        +ComputeHistogram()
     }
 
     class NativeImageProcessingBridge {
-        +P/Invoke 호출 + 타이밍
-    }
-
-    class NativeMethods {
-        <<static P/Invoke>>
-        +IpGaussian()
-        +IpSobel()
-        +IpDilation()
-        +IpTemplateMatch()
-        +IpComputeHistogram()
-        +...
-    }
-
-    class ImageProcessingNative {
-        <<C++ DLL>>
-        Morphology / Filter
-        Smoothing / Threshold
-        TemplateMatching
-        ROI helpers
-    }
-
-    MainWindow --> IImageProcessingFacade
-    IImageProcessingFacade <|.. ImageProcessingFacade
-    ImageProcessingFacade --> IImageProcessingBridge
-    IImageProcessingBridge <|.. NativeImageProcessingBridge
-    NativeImageProcessingBridge --> NativeMethods
-    NativeMethods ..> ImageProcessingNative : DllImport
-```
-
-### 연산 그룹 (발표용 박스)
-
-| 그룹 | C# 진입 | C++ API 예 |
-|------|---------|------------|
-| Morphology | `RunMorphology` | `IpDilation`, `IpErosion` |
-| Filter | `RunFilter` | `IpGaussian`, `IpLaplacian`, `IpSobel` |
-| Smoothing / Threshold | `RunSmoothing` / `RunThreshold` | `IpSmoothing`, `IpThreshold` |
-| Matching | `RunMatching` | `IpTemplateMatch` |
-| ROI / Hist | `RegisterTemplate` / `GetHistogram` | `IpExtractRoi`, `IpComputeHistogram` |
-
----
-
-## 4. 데이터 모델 (버퍼가 어떻게 흐르는가)
-
-**메시지:** 표시용 Bitmap과 연산용 Gray8 PixelBuffer를 분리한다.
-
-```mermaid
-classDiagram
-    direction LR
-
-    class ImageData {
-        +Bitmap PixelData
-        +Width / Height
-        +Dispose()
+        +P/Invoke 호출
+        +ROI pin / 타이밍
     }
 
     class PixelBuffer {
         +byte[] Data
-        +Width
-        +Height
-        +FromBitmap()
-        +ToBitmap()
-        +Clone()
-    }
-
-    class RoiData {
-        +StartX
-        +StartY
-        +Width
-        +Height
-        +IsValid()
-    }
-
-    class TemplateData {
-        +RoiData SourceRoi
-        +byte[] Pixels
         +Width / Height
     }
 
-    class ProcessingParams {
-        +KernelSize
-        +ThresholdValue
-        +GaussianSigma
-        +Roi
+    class RoiData {
+        +StartX / StartY
+        +Width / Height
     }
 
-    class ProcessingResult {
-        +Success
-        +OutputPixels
-        +ElapsedMs
+    class ImageProcessingNative {
+        <<C++ DLL>>
+        IpDilation / IpErosion
+        IpGaussian / IpLaplacian / IpSobel
+        IpSmoothing / IpThreshold
+        IpTemplateMatch
     }
 
-    class MatchingResult {
-        +BestX / BestY
-        +Score
-        +Success
-    }
+    MainWindow *-- ImageViewerControl : Source, Result
+    MainWindow --> ImageFileService : BMP I/O
+    MainWindow --> ImageProcessingFacade : 영상처리
+    MainWindow --> PixelBuffer : 작업 버퍼
+    MainWindow --> RoiData : 선택 영역
 
-    class IpRoi {
-        <<native struct>>
-        +X Y Width Height
-    }
-
-    TemplateData --> RoiData
-    ProcessingParams --> RoiData
-    IpRoi ..> RoiData : From(roi)
-    MainWindow ..> PixelBuffer : _source / _work
-    MainWindow ..> ProcessingParams : BuildParams()
+    ImageProcessingFacade --> NativeImageProcessingBridge
+    NativeImageProcessingBridge ..> ImageProcessingNative : DllImport
+    ImageProcessingFacade ..> PixelBuffer
 ```
 
-```text
-표시: Bitmap / BitmapSource  →  Viewer
-연산: PixelBuffer (Gray8)    →  C++ DLL
-ROI:  RoiData                →  IpRoi (마샬링)
-```
+| 클래스 | 역할 (한 줄) |
+|--------|-------------|
+| **MainWindow** | 화면 조립 + 버튼 이벤트 + ROI/파이프라인 상태 |
+| **ImageViewerControl** | 이미지 표시, 줌/팬, ROI 드래그 |
+| **ImageFileService** | BMP 헤더/로드/저장 |
+| **ImageProcessingFacade** | UI가 보는 유일한 처리 API |
+| **NativeImageProcessingBridge** | P/Invoke + ROI 전달 + 처리 시간 |
+| **PixelBuffer** | Gray8 연산용 픽셀 버퍼 |
+| **RoiData** | 선택 영역 (없으면 전체 이미지) |
+| **ImageProcessingNative** | OpenMP 병렬 알고리즘 구현 |
 
 ---
 
-## 5. ROI → Histogram → Template Matching (기능 흐름)
+## 3. 처리 데이터 흐름
 
-**메시지:** 같은 ROI가 Histogram과 Template의 입력이 된다.
+**메시지:** 표시용 Bitmap과 연산용 Gray8를 분리한다. ROI 없으면 전체, 있으면 해당 영역만.
 
 ```mermaid
-flowchart TB
-    A[SourceViewer에서 ROI 드래그] --> B[RoiData]
-    B --> C[Facade.GetHistogram]
-    C --> D[HistogramControl.SetHistogram]
-    B --> E[Facade.RegisterTemplate]
-    E --> F[TemplateData]
-    F --> G[방식 선택 DIFF / CORR / COEFF]
-    G --> H[Facade.RunMatching]
-    H --> I[MatchingResult Score · Position]
-    I --> J[ResultViewer에 매칭 ROI 표시]
-    I --> K[합격 기준과 비교 → PASS / FAIL]
+flowchart LR
+    A[BMP 파일] --> B[ImageFileService]
+    B --> C[표시: BitmapSource]
+    B --> D[연산: PixelBuffer]
+    C --> E[Viewer]
+    D --> F[Facade]
+    F --> G[Bridge]
+    G --> H[C++ DLL]
+    H --> I[결과 PixelBuffer]
+    I --> E
+    J[RoiData?] -.-> F
 ```
 
-```mermaid
-classDiagram
-    direction TB
-
-    class MainWindow {
-        -RoiData? _currentRoi
-        -TemplateData? _templateData
-        -MatchingMethod _selectedMethod
-        +OnRoiSelected()
-        +TemplateRegister()
-        +CompareAndJudge()
-    }
-
-    class RoiData
-    class TemplateData
-    class MatchingResult
-    class IImageProcessingFacade
-
-    MainWindow --> RoiData
-    MainWindow --> TemplateData
-    MainWindow --> IImageProcessingFacade
-    IImageProcessingFacade ..> TemplateData : RegisterTemplate
-    IImageProcessingFacade ..> MatchingResult : RunMatching
-    TemplateData --> RoiData
-```
+| 조건 | 동작 |
+|------|------|
+| ROI 없음 | Native `roi = null` → **전체 이미지** 처리 |
+| ROI 있음 | 해당 사각형만 처리, 밖은 원본 유지 |
+| Matching | Template 등록(ROI) → 검색(전체 또는 Search ROI) |
 
 ---
 
-## 6. 슬라이드 배치 추천
-
-| 슬라이드 | 쓸 다이어그램 | 말할 한 문장 |
-|----------|---------------|--------------|
-| 아키텍처 개요 | **§0 계층 흐름** | UI / Service / Native를 나눠 교체·확장이 쉽다 |
-| UI | **§1** | 원본·결과 Viewer + Navigator + Histogram |
-| 파일 I/O | **§2** | 헤더 선판독 + 대용량 Preview |
-| 처리 구조 | **§3** | Facade가 UI와 C++ 사이를 막는다 |
-| 데이터 | **§4** | 표시 Bitmap ≠ 연산 PixelBuffer |
-| 검사 시나리오 | **§5** | ROI → Template → Match → 판정 |
-
----
-
-## 7. 의존성 방향 (한 줄 요약)
+## 4. 파일 구조 (발표용)
 
 ```text
-Controls / MainWindow
-        ↓
-  ImageProcessingFacade  ·  ImageFileService  ·  Models
-        ↓
-  NativeImageProcessingBridge
-        ↓
-  NativeMethods  (P/Invoke)
-        ↓
-  ImageProcessingNative.dll  (C++)
+ImageProgram/                    ← WPF (C#)
+├── MainWindow.xaml(.cs)         화면·이벤트 허브
+├── Controls/                    Viewer, Navigator, Histogram
+├── Services/
+│   ├── ImageFileService         BMP I/O
+│   └── Processing/
+│       ├── ImageProcessingFacade
+│       └── NativeImageProcessingBridge
+├── Models/                      RoiData, TemplateData, Params…
+└── Native/                      PixelBuffer, P/Invoke 선언
+
+ImageProcessingNative/           ← C++ DLL
+├── include/ImageProcessingApi.h  C API (export)
+└── src/
+    ├── Morphology.cpp
+    ├── Filter.cpp
+    ├── Smoothing.cpp
+    ├── Threshold.cpp
+    └── TemplateMatching.cpp
 ```
 
-하위(C++)는 상위(UI)를 모른다. 알고리즘 추가는 DLL/`*.cpp`에만 하면 된다.
+---
+
+## 5. 슬라이드 배치 제안
+
+| 슬라이드 | 넣을 것 |
+|----------|---------|
+| 1 | **§1 계층 아키텍처** + 한 줄: “UI ↔ Facade ↔ Bridge ↔ C++” |
+| 2 | **§2 클래스 다이어그램** + 위 표에서 핵심 4개만 말로 |
+| 3 | **§3 데이터 흐름** + ROI optional 규칙 |
+| 4 | **§4 파일 구조** (C# / C++ 이원화) |

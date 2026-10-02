@@ -28,6 +28,10 @@ enum IpStatus
     IP_ERR_NOT_IMPLEMENTED = -100
 };
 
+
+
+
+
 typedef struct IpRoi
 {
     int X;

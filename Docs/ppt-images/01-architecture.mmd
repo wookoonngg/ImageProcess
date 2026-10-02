@@ -1,0 +1,31 @@
+flowchart TB
+    subgraph UI["Presentation (WPF)"]
+        MW[MainWindow]
+        V["ImageViewerControl<br/>Source / Result"]
+        N[NavigatorControl]
+        H[HistogramControl]
+    end
+
+    subgraph SVC["Application / Service"]
+        FS[ImageFileService]
+        FAC[ImageProcessingFacade]
+        BR[NativeImageProcessingBridge]
+    end
+
+    subgraph DATA["Data"]
+        PB[PixelBuffer Gray8]
+        ROI[RoiData]
+        TPL[TemplateData]
+    end
+
+    subgraph NATIVE["Native C++ DLL"]
+        DLL["ImageProcessingNative.dll<br/>Morphology · Filter · Threshold<br/>Smoothing · TemplateMatching"]
+    end
+
+    MW --> V & N & H
+    MW --> FS
+    MW --> FAC
+    FAC --> BR
+    BR -->|P/Invoke| DLL
+    MW --> PB & ROI & TPL
+    FAC --> PB

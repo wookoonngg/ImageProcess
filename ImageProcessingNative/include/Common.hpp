@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cstring>
 
+
+using namespace std;
+
 // C# 픽셀 버퍼 패딩 없이 == width -> 일대일 매칭 되게
 inline int IpStride(int width) { return width; }
 
@@ -22,8 +25,7 @@ inline void IpResolveRoi(const IpRoi* roi, int width, int height, int& startX, i
     startX = 0;
     startY = 0;
     endX = width;
-    endY = height;
-
+    endY = height; 
     if (roi == nullptr)
         return;
 

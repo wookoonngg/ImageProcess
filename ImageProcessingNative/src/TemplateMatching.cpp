@@ -8,6 +8,8 @@
 #include <intrin.h>
 #endif
 
+
+
 static double ScoreDiff(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
     const double area = static_cast<double>(templWidth) * templHeight;
@@ -44,6 +46,10 @@ static double ScoreDiff(const unsigned char* image, int imageWidth, const unsign
     return 1.0 / (1.0 + (double)sum / area);
 }
 
+
+
+
+
 static double ScoreCorr(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
     long long sumIT = 0, sumI2 = 0, sumT2 = 0;
@@ -57,14 +63,24 @@ static double ScoreCorr(const unsigned char* image, int imageWidth, const unsign
         const __m128i z = _mm_setzero_si128();
         for (; tx + 16 <= templWidth; tx += 16)
         {
+
+
             __m128i a = _mm_loadu_si128((const __m128i*)(irow + tx));
             __m128i b = _mm_loadu_si128((const __m128i*)(trow + tx));
+
+
             __m128i loA = _mm_unpacklo_epi8(a, z), loB = _mm_unpacklo_epi8(b, z);
             __m128i hiA = _mm_unpackhi_epi8(a, z), hiB = _mm_unpackhi_epi8(b, z);
+
+
+
             aIT = _mm_add_epi32(aIT, _mm_add_epi32(_mm_madd_epi16(loA, loB), _mm_madd_epi16(hiA, hiB)));
             aI2 = _mm_add_epi32(aI2, _mm_add_epi32(_mm_madd_epi16(loA, loA), _mm_madd_epi16(hiA, hiA)));
             aT2 = _mm_add_epi32(aT2, _mm_add_epi32(_mm_madd_epi16(loB, loB), _mm_madd_epi16(hiB, hiB)));
         }
+
+
+
         aIT = _mm_add_epi32(aIT, _mm_srli_si128(aIT, 8)); aIT = _mm_add_epi32(aIT, _mm_srli_si128(aIT, 4));
         aI2 = _mm_add_epi32(aI2, _mm_srli_si128(aI2, 8)); aI2 = _mm_add_epi32(aI2, _mm_srli_si128(aI2, 4));
         aT2 = _mm_add_epi32(aT2, _mm_srli_si128(aT2, 8)); aT2 = _mm_add_epi32(aT2, _mm_srli_si128(aT2, 4));
@@ -80,8 +96,17 @@ static double ScoreCorr(const unsigned char* image, int imageWidth, const unsign
     return (denom < 1e-9) ? 0.0 : (double)sumIT / denom;
 }
 
+
+
+
+
+
+
 static double ScoreCoeff(const unsigned char* image, int imageWidth, const unsigned char* templ, int templWidth, int templHeight, int ox, int oy)
 {
+
+
+
     const double area = (double)templWidth * templHeight;
     double sumI = 0.0, sumT = 0.0;
     for (int ty = 0; ty < templHeight; ++ty)

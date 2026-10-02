@@ -32,6 +32,12 @@
         int x = startX;
         const int row = y * width;
 
+
+
+
+
+
+
 #if defined(_MSC_VER)
         for (; x + 16 <= endX; x += 16)
         {

@@ -52,6 +52,11 @@ namespace WpfImageProcessing.Native
         public const int ErrInvalidParam = -3;
         public const int ErrNotImplemented = -100;
 
+
+
+
+
+
         public static string ToMessage(int status) => status switch
         {
             Ok => "OK",
